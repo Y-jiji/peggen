@@ -1,0 +1,9 @@
+[package]
+name = "pegging-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+once_cell = "1.19.0"
+pegging-core = { version = "0.1.0", path = "../pegging-core" }
+pegging-macros = { version = "0.1.0", path = "../pegging-macros" }

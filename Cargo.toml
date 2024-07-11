@@ -1,0 +1,3 @@
+[workspace]
+members     = ["pegging-core", "pegging-macros", "pegging-test"]
+resolver    = "2"
