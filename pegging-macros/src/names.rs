@@ -1,1 +1,0 @@
-pub const INPUT: &'static str = "input";

@@ -32,10 +32,10 @@ impl Arena {
         let slice = &mut (*self.buffer.get())[a / N][a % N .. b % N];
         let v_ref = from_raw_parts(&value as *const _ as *const u8, size_of::<V>());
         slice.copy_from_slice(v_ref);
-        let v_ref = &*(slice.as_ptr() as *const V);
-        v_ref
+        &*(slice.as_ptr() as *const V)
     }
     pub unsafe fn alloc_str(&self, value: &str) -> &str {
+        if value.len() == 0 { return "" }
         // aligned start
         let mut a = self.size();
         let mut b = a + value.len();

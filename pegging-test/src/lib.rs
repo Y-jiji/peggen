@@ -1,69 +1,116 @@
+use std::sync::atomic::AtomicUsize;
+
+use pegging_macros::{ParserImpl, Space};
 use pegging_core::*;
+// mod calculator;
+
+#[derive(Debug, Clone, Copy, Space, ParserImpl)]
+pub enum Expr<'a> {
+    /// Let binding (allow bind pattern)
+    #[parse("let {patt} = {bind}; {expr}")]
+    Let {
+        patt: &'a Span<'a, Pat<'a>>,
+        bind: &'a Span<'a, Expr<'a>>,
+        expr: &'a Span<'a, Expr<'a>>,
+    },
+    /// Lambda abstraction (allow bind pattern)
+    #[parse("{patt} -> {expr}")]
+    Fn {
+        patt: &'a Span<'a, Pat<'a>>,
+        expr: &'a Span<'a, Expr<'a>>,
+    },
+    /// Addition
+    #[parse("{0:2} + {1:1}", nice=2)]
+    Add(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
+    /// Subtraction
+    #[parse("{0:2} - {1:1}", nice=2)]
+    Sub(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
+    /// Multiplication
+    #[parse("{0:4} * {1:3}", nice=4)]
+    Mul(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
+    /// Division
+    #[parse("{0:4} / {1:3}", nice=4)]
+    Div(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
+    /// Function application
+    #[parse("{0:6} : {1:5}", nice=6)]
+    App(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
+    /// Field (or attribute) access
+    #[parse("{0:8} . {1:7}", nice=8)]
+    Att(&'a Span<'a, Expr<'a>>, &'a Pat<'a>),
+    /// Array construction
+    #[parse("( {0} )")]
+    Arr(Arr<'a>),
+    /// Object construction
+    #[parse("( {0} )")]
+    Obj(Obj<'a>),
+    /// Scoping
+    #[parse("{{ {0} }}")]
+    Scope(&'a Span<'a, Expr<'a>>),
+    /// Identity
+    #[parse("{0}")]
+    Ident(&'a Span<'a, Pat<'a>>),
+}
+
+#[derive(Debug, Clone, Copy, ParserImpl, Space)]
+pub enum Arr<'a> {
+    #[parse("{0} , {1}")]
+    Many(&'a Expr<'a>, &'a Self),
+    #[parse("{0}")]
+    One(&'a Expr<'a>),
+}
+
+#[derive(Debug, Clone, Copy, ParserImpl, Space)]
+pub enum Obj<'a> {
+    #[parse("{0} : {1} , {2}")]
+    Many(&'a Pat<'a>, &'a Expr<'a>, &'a Self),
+    #[parse("{0} : {1}")]
+    One(&'a Pat<'a>, &'a Expr<'a>),
+}
 
 #[derive(Debug, Clone, Copy)]
-pub enum Expr<'a> {
-    Atom(&'a str),
-    Add(&'a Expr<'a>, &'a Expr<'a>),
-    Mul(&'a Expr<'a>, &'a Expr<'a>),
-}
+pub struct Pat<'a>(&'a str);
 
-impl<'a> ParserImpl<'a> for Expr<'a> {
+impl<'a> ParserImpl<'a> for Pat<'a> {
     fn parser_impl(
         source: Source<'a>, 
-        holder: Holder<'a>, 
-        preced: u16
-    ) -> Result<(Self, Source<'a>), Error<'a>> {
-        todo!()
-    }
-}
-
-impl<'a> Space<'a> for Expr<'a> {}
-
-impl<'a> Expr<'a> {
-    fn parser_impl_atom(
-        source: Source<'a>, 
-        holder: Holder<'a>, 
-        preced: u16
+        out_arena: &'a Arena,
+        err_arena: &'a Arena,
+        _: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
         let mut len = 0;
         for c in source[..].chars() {
-            len += c.len_utf8();
+            if c.is_ascii_alphanumeric() {
+                len += c.len_utf8();
+            } else {
+                break;
+            }
         }
-        unsafe {
-            let ident = holder.out.alloc_str(&source[..len]);
-            Ok((Expr::Atom(ident), source.proceed(len)))
-        }
+        unsafe {if len == 0 {
+            Err(Error::Mismatch {
+                range: (source.split, source.split + len), 
+                token: "", 
+                piece: err_arena.alloc_str(&source[..1])
+            })
+        } else {
+            let ident = out_arena.alloc_str(&source[..len]);
+            Ok((Pat(ident), source.proceed(len)))
+        } }
     }
-    fn parser_impl_add(
-        source: Source<'a>, 
-        holder: Holder<'a>, 
-        preced: u16
-    ) -> Result<(Self, Source<'a>), Error<'a>> {
-        let (_0, source) = Self::parser_impl(source, holder, preced)?;
-        let source = Self::space(source)?;
-        let source = token(source, holder, "+")?;
-        let source = Self::space(source)?;
-        let (_1, source) = Self::parser_impl(source, holder, preced)?;
-        unsafe {
-            let _0 = holder.out.alloc(_0);
-            let _1 = holder.out.alloc(_1);
-            Ok((Self::Add(_0, _1), source))
-        }
-    }
-    fn parser_impl_mul(
-        source: Source<'a>, 
-        holder: Holder<'a>, 
-        preced: u16
-    ) -> Result<(Self, Source<'a>), Error<'a>> {
-        let (_0, source) = Self::parser_impl(source, holder, preced)?;
-        let source = Self::space(source)?;
-        let source = token(source, holder, "+")?;
-        let source = Self::space(source)?;
-        let (_1, source) = Self::parser_impl(source, holder, preced)?;
-        unsafe {
-            let _0 = holder.out.alloc(_0);
-            let _1 = holder.out.alloc(_1);
-            Ok((Self::Mul(_0, _1), source))
-        }
+}
+
+#[cfg(test)]
+mod test {
+    use pegging_core::{Arena, ParserImpl, Source};
+    use crate::Expr;
+
+    #[test]
+    fn test_parsing() {
+        let source = Source::new("
+            let f = x -> y -> (x: y, y: x);
+            f:x:y
+        ".trim());
+        let out_arena = Arena::new();
+        let err_arena = Arena::new();
+        println!("{:?}", Expr::parser_impl(source, &out_arena, &err_arena, 0).unwrap());
     }
 }

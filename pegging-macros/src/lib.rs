@@ -1,22 +1,30 @@
-use proc_macro::TokenStream;
+use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{self, Data, DeriveInput, Result};
 mod variant;
 mod fmt;
-mod names;
 use fmt::*;
-use names::*;
+
+#[proc_macro_derive(Space)]
+pub fn space_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    // Parse the input tokens into a syntax tree
+    let ast = syn::parse::<DeriveInput>(input).unwrap();
+    // Get the enum name
+    let name = &ast.ident;
+    quote! {impl<'a> Space<'a> for #name<'a> {}}.into()
+}
 
 #[proc_macro_derive(ParserImpl, attributes(parse))]
-pub fn parser_impl_derive(input: TokenStream) -> TokenStream {
-    match impl_parser(input) {
-        Ok(out) => out,
+pub fn parser_impl_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match impl_parser(input.into()) {
+        Ok(out) => out.into(),
         Err(err) => err.to_compile_error().into(),
     }
 }
 
 fn impl_parser(input: TokenStream) -> Result<TokenStream> {
     // Parse the input tokens into a syntax tree
-    let ast = syn::parse::<DeriveInput>(input).unwrap();
+    let ast = syn::parse2::<DeriveInput>(input).unwrap();
     // Only allow enum
     let Data::Enum(data) = ast.data else {
         Err(syn::Error::new_spanned(&ast.ident, "#[derive(ParserImpl)] can only handle enum. "))?
@@ -35,29 +43,38 @@ fn impl_parser(input: TokenStream) -> Result<TokenStream> {
         arm_names.push(name);
         arm_impls.extend(func);
     }
-    let try_each_arm = impl_parser_try_variants(arm_names);
-    let arm_impls = arm_impls.to_string();
-    Err(syn::Error::new_spanned(&ast.ident, arm_impls.clone()))?;
+    let body = impl_parser_body(arm_names);
     // Implement ParserImpl for enum
-    Ok(quote::quote! {
+    Ok(quote! {
         impl<'a> ParserImpl<'a> for #name<'a> {
-            fn parser_impl(input: &'a str, p: usize, holder: Holder<'a>) -> Result<&'a Self, > {
-                // Try each variant
-                #try_each_arm
-                Ok(out)
+            fn parser_impl(
+                source: Source<'a>, 
+                out_arena: &'a Arena,
+                err_arena: &'a Arena,
+                nice: u16,
+            ) -> Result<(Self, Source<'a>), Error<'a>> {
+                #body
             }
         }
         #arm_impls
     }.into())
 }
 
-fn impl_parser_try_variants(arm_names: Vec<syn::Ident>) -> String {
-    use std::fmt::Write;
-    let mut body = String::new();
-    for arm in arm_names {
-        writeln!(&mut body, "let Ok((out, p)) = match {arm}({INPUT}, p, holder) else {{").unwrap();
-        writeln!(&mut body, "    return holder.failure(p, );").unwrap();
-        writeln!(&mut body, "}}").unwrap();
-    }
+fn impl_parser_body(arm_names: Vec<syn::Ident>) -> TokenStream {
+    let mut body = TokenStream::new();
+    body.extend(quote! {
+        let err_len = unsafe { err_arena.size() };
+        let out_len = unsafe { out_arena.size() };
+        let chain = List::new();
+    });
+    for arm in arm_names {body.extend(quote! {
+        let chain = match Self::#arm(source, out_arena, err_arena, nice) {
+            Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
+            Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
+        };
+    })}
+    body.extend(quote! {
+        Err(Error::List(unsafe { err_arena.alloc(chain) }))
+    });
     body
 }

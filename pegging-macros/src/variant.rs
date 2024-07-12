@@ -1,19 +1,22 @@
 use std::{collections::{HashMap, HashSet}, fmt::Debug, hash::Hash};
-use proc_macro::TokenStream;
-use quote::ToTokens;
-use syn::{self, Ident, punctuated::Punctuated, token::Comma, Attribute, Error, Field, FieldsNamed, FieldsUnnamed, Meta, Result};
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{self, punctuated::Punctuated, token::Comma, Attribute, Error, Field, FieldsNamed, FieldsUnnamed, Ident, Meta, Result};
 use crate::*;
 
 // Implement parser_impl_ ... for a variant
 pub fn impl_parser_variant(name: &syn::Ident, var: syn::Variant) -> Result<(Ident, TokenStream)> {
     let func = prepare_func_name(&var);
-    let func = syn::parse_str::<syn::Ident>(&func).unwrap();
-    let attr = prepare_attribute(&var)?;
-    let body = prepare_func_body(&var, &attr)?;
-    let body = syn::parse_str::<syn::Expr>(&body).unwrap();
+    let (attr, nice) = prepare_attribute(&var)?;
+    let body = prepare_func_body(&var, &attr, nice)?;
     Ok((func.clone(), quote::quote! {
-        impl #name {
-            fn #func() -> Result<usize, usize> {
+        impl<'a> #name<'a> {
+            fn #func(
+                source: Source<'a>, 
+                out_arena: &'a Arena,
+                err_arena: &'a Arena,
+                nice: u16,
+            ) -> Result<(Self, Source<'a>), Error<'a>> {
                 #body
             }
         }
@@ -21,31 +24,32 @@ pub fn impl_parser_variant(name: &syn::Ident, var: syn::Variant) -> Result<(Iden
 }
 
 // Get function name from variant name: e.g. CamelCaseA -> parser_impl_camel_case_a
-fn prepare_func_name(var: &syn::Variant) -> String {
+fn prepare_func_name(var: &syn::Variant) -> Ident {
     let mut name_fn = var.ident.to_string();
     for i in 'A'..='Z' {
         name_fn = name_fn.replace(i, &format!("_{}", i.to_lowercase()));
     }
     let name_fn = name_fn.trim_start_matches("_").to_string();
     let name_fn = format!("parser_impl_{name_fn}");
-    return name_fn;
+    return syn::parse_str::<syn::Ident>(&name_fn).unwrap();
 }
 
 // Remove unwanted cases in attribute
-fn prepare_attribute(var: &syn::Variant) -> Result<String> {
+fn prepare_attribute(var: &syn::Variant) -> Result<(String, u16)> {
     if matches!(var.fields, syn::Fields::Unit) {
         Err(Error::new_spanned(
             var, 
             "#[derive(ParserImpl)] can only handle non-unit variants, e.g. A(...) or A{...}"
         ))?
     }
-    let Some(Attribute { meta: Meta::List(fmt), .. }) = var.attrs.last() else {
+    let Some(Attribute { meta: Meta::List(meta), .. }) = var.attrs.last() else {
         Err(Error::new_spanned(
             var, 
-            format!("#[derive(ParserImpl)] can only handle variants marked with attribute #[parse(\"...\")]")
+            format!("#[derive(ParserImpl)] can only handle variants marked with attribute #[parse(pat=\"...\", nice=...)]")
         ))?
     };
-    let Some(proc_macro2::TokenTree::Literal(fmt)) = fmt.tokens.clone().into_iter().next() else {
+    let mut meta = meta.tokens.clone().into_iter();
+    let Some(proc_macro2::TokenTree::Literal(fmt)) = meta.next() else {
         Err(Error::new_spanned(
             var, 
             format!("#[derive(ParserImpl)] can only handle variants marked with attribute #[parse(\"...\")]")
@@ -53,26 +57,37 @@ fn prepare_attribute(var: &syn::Variant) -> Result<String> {
     };
     let fmt = fmt.to_string();
     let fmt = &fmt[1..fmt.len()-1];
-    Ok(fmt.to_string())
+    let mut meta = meta.map(|x| x.to_string());
+    let mut nice = u16::MAX;
+    if meta.next() == Some(String::from(",")) {
+        if meta.next() == Some(String::from("nice")) {
+            if meta.next() == Some(String::from("=")) {
+                if let Some(p) = meta.next().map(|x| x.parse().ok()).flatten() {
+                    nice = p;
+                }
+            }
+        }
+    }
+    Ok((fmt.to_string(), nice))
 }
 
 // Prepare function body from format string
-fn prepare_func_body(var: &syn::Variant, fmt: &str) -> Result<String> {
+fn prepare_func_body(var: &syn::Variant, fmt: &str, nice: u16) -> Result<TokenStream> {
     let fmt = parse_fmt_string(fmt)
         .map_err(|_| Error::new_spanned(var, format!("cannot parse the format string")))?;
     if let syn::Fields::Named(FieldsNamed { named, .. }) = &var.fields {
-        return prepare_func_body_named(var, fmt, named);
+        return prepare_func_body_named(var, fmt, named, nice);
     }
     else if let syn::Fields::Unnamed(FieldsUnnamed { unnamed, .. }) = &var.fields {
-        return prepare_func_body_unnamed(var, fmt, unnamed);
+        return prepare_func_body_unnamed(var, fmt, unnamed, nice);
     }
     unreachable!()
 }
 
 /// Generate function body for unnamed fields
-fn prepare_func_body_unnamed(var: &syn::Variant, fmt: Vec<Token>, unnamed: &Punctuated<Field, Comma>) -> Result<String> {
+fn prepare_func_body_unnamed(var: &syn::Variant, fmt: Vec<Token>, unnamed: &Punctuated<Field, Comma>, nice: u16) -> Result<TokenStream> {
     use Token::*;
-    use std::fmt::Write;
+    // Check holes and fills match
     let holes = fmt.iter().try_fold(HashSet::new(), |mut set, token| match token {
         Space{..} | Literal{..} => Ok(set),
         Format((fmt, _bp)) => match fmt.parse::<usize>() {
@@ -84,30 +99,33 @@ fn prepare_func_body_unnamed(var: &syn::Variant, fmt: Vec<Token>, unnamed: &Punc
     let fills = (0..var.fields.len()).collect::<HashSet<usize>>();
     difference(var, holes, fills)?;
     let fields = unnamed.iter().map(|x| x.ty.clone()).collect::<Vec<_>>();
-    // write function body
-    let mut body = String::new();
-    for token in fmt {
-        match token {
-            Format((fmt, _bp)) => {
-                let ty = fields[fmt.parse::<usize>().unwrap()].to_token_stream().to_string();
-                writeln!(&mut body, "let (_{fmt}, p) = {ty}::parser_impl(input, p)?;").unwrap();
-            }
-            Space => {
-                writeln!(&mut body, "let p = Self::space({INPUT}, p)?;").unwrap();
-            }
-            Literal(literal) => {
-                let len = literal.len();
-                writeln!(&mut body, "let p = if {INPUT}[p..p+{len}] == \"{literal}\" {{ p + {len} }} else {{ Err(p)? }};").unwrap();
-            }
+    // Write function body and variant arguments
+    let mut body = TokenStream::new();
+    let mut args = TokenStream::new();
+    body.extend(quote! {if nice >= #nice { return Err(Error::Precedence); }});
+    for token in fmt {match token {
+        Literal(literal) => 
+            body.extend(quote! {let source = token(source, &err_arena, #literal)?;}),
+        Space => 
+            body.extend(quote! {let source = Self::space(source)?;}),
+        Format((fmt, bp)) => {
+            let id = syn::parse_str::<Ident>(&format!("_{fmt}")).unwrap();
+            let ty = fields[fmt.parse::<usize>().unwrap()].clone();
+            body.extend(quote! {
+                let (#id, source) = <#ty>::parser_impl(source, out_arena, err_arena, #bp)?;
+            });
+            args.extend(quote! { #id, });
         }
-    }
+    } }
+    // Write result into function body
+    let ident = var.ident.clone();
+    body.extend(quote! {Ok((Self::#ident(#args), source))});
     Ok(body)
 }
 
 /// Generate function body for named fields
-fn prepare_func_body_named(var: &syn::Variant, fmt: Vec<Token>, named: &Punctuated<Field, Comma>) -> Result<String> {
+fn prepare_func_body_named(var: &syn::Variant, fmt: Vec<Token>, named: &Punctuated<Field, Comma>, nice: u16) -> Result<TokenStream> {
     use Token::*;
-    use std::fmt::Write;
     let holes = fmt.iter().try_fold(HashSet::new(), |mut set, token| match token {
         Space{..} | Literal{..} => Ok(set),
         Format((fmt, _)) if set.contains(fmt) => Err(Error::new_spanned(var, format!("repeated format symbol {{{}}}", fmt))),
@@ -119,23 +137,27 @@ fn prepare_func_body_named(var: &syn::Variant, fmt: Vec<Token>, named: &Punctuat
     let fills = named.iter().map(|x| x.ident.as_ref().unwrap().to_string()).collect::<HashSet<String>>();
     difference(var, holes, fills)?;
     let fields = named.iter().map(|x| (x.ident.as_ref().unwrap().to_string(), x.ty.clone())).collect::<HashMap<_, _>>();
-    // write function body
-    let mut body = String::new();
-    for token in fmt {
-        match token {
-            Format((fmt, _)) => {
-                let ty = fields[&fmt].to_token_stream().to_string();
-                writeln!(&mut body, "let ({fmt}, p) = {ty}::parser_impl({INPUT}, p)?;").unwrap();
-            }
-            Space => {
-                writeln!(&mut body, "let p = Self::space({INPUT}, p)?;").unwrap();
-            }
-            Literal(literal) => {
-                let len = literal.len();
-                writeln!(&mut body, "let p = if {INPUT}[p..p+{len}] == \"{literal}\" {{ p + {len} }} else {{ Err(p)? }};").unwrap();
-            }
+    // Write function body and variant arguments
+    let mut body = TokenStream::new();
+    let mut args = TokenStream::new();
+    body.extend(quote! {if nice >= #nice { return Err(Error::Precedence); }});
+    for token in fmt {match token {
+        Literal(literal) => 
+            body.extend(quote! {let source = token(source, &err_arena, #literal)?;}),
+        Space => 
+            body.extend(quote! {let source = Self::space(source)?;}),
+        Format((fmt, bp)) => {
+            let id = syn::parse_str::<Ident>(&format!("{fmt}")).unwrap();
+            let ty = fields[&fmt].clone();
+            body.extend(quote! {
+                let (#id, source) = <#ty>::parser_impl(source, out_arena, err_arena, #bp)?;
+            });
+            args.extend(quote! { #id, });
         }
-    }
+    } }
+    // Write result into function body
+    let ident = var.ident.clone();
+    body.extend(quote! {Ok((Self::#ident{#args}, source))});
     Ok(body)
 }
 

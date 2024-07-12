@@ -8,6 +8,9 @@ impl<'a> Source<'a> {
     pub fn proceed(&self, by: usize) -> Self {
         Source { split: self.split + by, inner: self.inner }
     }
+    pub fn new(inner: &'a str) -> Self {
+        Self { inner, split: 0 }
+    }
 }
 
 impl<'a, T: std::ops::RangeBounds<usize>> std::ops::Index<T> for Source<'a> {
@@ -20,8 +23,8 @@ impl<'a, T: std::ops::RangeBounds<usize>> std::ops::Index<T> for Source<'a> {
             Unbounded => self.split,
         };
         let end = match index.end_bound() {
-            Excluded(x) => self.split + x.max(&1) - 1,
-            Included(x) => self.split + x,
+            Excluded(x) => self.split + x,
+            Included(x) => self.split + x + 1,
             Unbounded => self.inner.len(),
         }.min(self.inner.len());
         &self.inner[start..end]
