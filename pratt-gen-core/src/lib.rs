@@ -5,11 +5,13 @@ mod arena;
 mod token;
 mod space;
 mod span;
+mod primitive;
 pub use source::*;
 pub use arena::*;
 pub use token::*;
 pub use space::*;
 pub use span::*;
+pub use primitive::*;
 
 static COUNTER: AtomicU16 = AtomicU16::new(0);
 
@@ -97,8 +99,10 @@ impl<'a, X: ParserImpl<'a>> ParserImpl<'a> for &'a X {
         err_arena: &'a Arena,
         precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
-        let (out, source) = X::parser_impl(source, out_arena, err_arena, precedence)?;
-        unsafe { Ok((out_arena.alloc(out), source)) }
+        stacker::maybe_grow(32*1024, 4*1024*1024, || {
+            let (out, source) = X::parser_impl(source, out_arena, err_arena, precedence)?;
+            unsafe { Ok((out_arena.alloc(out), source)) }
+        })
     }
 }
 

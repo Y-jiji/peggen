@@ -1,6 +1,9 @@
-use pegging_macros::{ParserImpl, Space};
-use pegging_core::*;
+#![allow(unused)]
+
+use pratt_gen::*;
 // mod calculator;
+mod xxyy;
+mod json;
 
 // reduce:():{range:10}:{x -> y -> push:x:y}
 
@@ -79,47 +82,14 @@ pub enum Obj<'a> {
     One(&'a Ident<'a>, &'a Expr<'a>),
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Ident<'a>(&'a str);
-
-impl<'a> Ident<'a> { pub fn to_str(&self) -> &'a str { self.0 } }
-
-impl<'a> ParserImpl<'a> for Ident<'a> {
-    fn parser_impl(
-        source: Source<'a>, 
-        out_arena: &'a Arena,
-        err_arena: &'a Arena,
-        _: u16,
-    ) -> Result<(Self, Source<'a>), Error<'a>> {
-        let mut len = 0;
-        for c in source[..].chars() {
-            if c.is_ascii_alphanumeric() {
-                len += c.len_utf8();
-            } else {
-                break;
-            }
-        }
-        unsafe {if len == 0 {
-            Err(Error::Mismatch {
-                range: (source.split, source.split + len), 
-                token: "", 
-                piece: err_arena.alloc_str(&source[..1])
-            })
-        } else {
-            let ident = out_arena.alloc_str(&source[..len]);
-            Ok((Ident(ident), source.proceed(len)))
-        } }
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use pegging_core::{Arena, ParserImpl, Source};
+    use pratt_gen::*;
     use crate::Expr;
 
     #[test]
-    fn test_parsing() {
-        let source = Source::new("f:x.y:y.z".trim());
+    fn calculator() {
+        let source = Source::new("x + y + z".trim());
         let out_arena = Arena::new();
         let err_arena = Arena::new();
         println!("{:?}", Expr::parser_impl(source, &out_arena, &err_arena, 0).unwrap());

@@ -1,5 +1,6 @@
 use crate::*;
 
+#[inline(always)]
 pub fn token<'a>(
     source: Source<'a>, 
     err_arena: &'a Arena,

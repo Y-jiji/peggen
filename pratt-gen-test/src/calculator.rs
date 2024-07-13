@@ -1,4 +1,4 @@
-use pegging_core::*;
+use pratt_gen_core::*;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Expr<'a> {

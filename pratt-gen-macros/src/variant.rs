@@ -11,12 +11,14 @@ pub fn impl_parser_variant(name: &syn::Ident, var: syn::Variant) -> Result<(Iden
     let body = prepare_func_body(&var, &attr, precedence)?;
     Ok((func.clone(), quote::quote! {
         impl<'a> #name<'a> {
+            #[inline(always)]
             fn #func(
                 source: Source<'a>, 
                 out_arena: &'a Arena,
                 err_arena: &'a Arena,
                 precedence: u16,
             ) -> Result<(Self, Source<'a>), Error<'a>> {
+                let name = stringify!{#name};
                 #body
             }
         }
@@ -103,6 +105,13 @@ fn prepare_func_body_unnamed(var: &syn::Variant, fmt: Vec<Token>, unnamed: &Punc
     let mut body = TokenStream::new();
     let mut args = TokenStream::new();
     body.extend(quote! {if precedence >= #precedence { return Err(Error::Precedence); }});
+    {
+        let var = var.ident.to_string();
+        body.extend(quote!{
+            #[cfg(feature="trace")]
+            println!("rule {name}::{} @ {}; rest {}", #var, source.split, &source[..source[..].chars().next().map(|x| x.len_utf8()).unwrap_or(0)]);
+        });
+    }
     for token in fmt {match token {
         Literal(literal) => 
             body.extend(quote! {let source = token(source, &err_arena, #literal)?;}),
@@ -141,6 +150,13 @@ fn prepare_func_body_named(var: &syn::Variant, fmt: Vec<Token>, named: &Punctuat
     let mut body = TokenStream::new();
     let mut args = TokenStream::new();
     body.extend(quote! {if precedence >= #precedence { return Err(Error::Precedence); }});
+    {
+        let var = var.ident.to_string();
+        body.extend(quote!{
+            #[cfg(feature="trace")]
+            println!("rule {name}::{} @ {}; rest {}", #var, source.split, &source[..source[..].chars().next().map(|x| x.len_utf8()).unwrap_or(0)]);
+        });
+    }
     for token in fmt {match token {
         Literal(literal) => 
             body.extend(quote! {let source = token(source, &err_arena, #literal)?;}),
