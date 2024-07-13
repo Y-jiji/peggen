@@ -86,7 +86,7 @@ pub trait ParserImpl<'a>: Sized + Copy {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>>;
 }
 
@@ -95,9 +95,9 @@ impl<'a, X: ParserImpl<'a>> ParserImpl<'a> for &'a X {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
-        let (out, source) = X::parser_impl(source, out_arena, err_arena, nice)?;
+        let (out, source) = X::parser_impl(source, out_arena, err_arena, precedence)?;
         unsafe { Ok((out_arena.alloc(out), source)) }
     }
 }

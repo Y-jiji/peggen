@@ -1,4 +1,4 @@
-use std::fmt::{Write, Debug, Formatter};
+use std::fmt::{Debug, Formatter};
 use crate::*;
 
 #[derive(Clone, Copy)]
@@ -15,10 +15,10 @@ impl<'a, T> ParserImpl<'a> for Span<'a, T> where
         source: Source<'a>, 
         out_arena: &'a Arena, 
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
         let start = source.split;
-        let (inner, source) = T::parser_impl(source, out_arena, err_arena, nice)?;
+        let (inner, source) = T::parser_impl(source, out_arena, err_arena, precedence)?;
         Ok((Span {
             range: (start, source.split), 
             value: inner,

@@ -51,7 +51,7 @@ fn impl_parser(input: TokenStream) -> Result<TokenStream> {
                 source: Source<'a>, 
                 out_arena: &'a Arena,
                 err_arena: &'a Arena,
-                nice: u16,
+                precedence: u16,
             ) -> Result<(Self, Source<'a>), Error<'a>> {
                 #body
             }
@@ -68,7 +68,7 @@ fn impl_parser_body(arm_names: Vec<syn::Ident>) -> TokenStream {
         let chain = List::new();
     });
     for arm in arm_names {body.extend(quote! {
-        let chain = match Self::#arm(source, out_arena, err_arena, nice) {
+        let chain = match Self::#arm(source, out_arena, err_arena, precedence) {
             Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
             Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
         };

@@ -1,42 +1,54 @@
-use std::sync::atomic::AtomicUsize;
-
 use pegging_macros::{ParserImpl, Space};
 use pegging_core::*;
 // mod calculator;
 
+// reduce:():{range:10}:{x -> y -> push:x:y}
+
 #[derive(Debug, Clone, Copy, Space, ParserImpl)]
 pub enum Expr<'a> {
     /// Let binding (allow bind pattern)
-    #[parse("let {patt} = {bind}; {expr}")]
+    #[parse("let {patt} = {bind} ; {expr}")]
     Let {
-        patt: &'a Span<'a, Pat<'a>>,
+        patt: &'a Span<'a, Ident<'a>>,
         bind: &'a Span<'a, Expr<'a>>,
         expr: &'a Span<'a, Expr<'a>>,
+    },
+    /// State update
+    #[parse("update {name} = {bind} ; {expr}")]
+    Update {
+        name: &'a Span<'a, Ident<'a>>,
+        bind: &'a Span<'a, Expr<'a>>,
+        expr: &'a Span<'a, Expr<'a>>,
+    },
+    /// State finalization (time travel)
+    #[parse("final {name}")]
+    Final {
+        name: &'a Span<'a, Ident<'a>>
     },
     /// Lambda abstraction (allow bind pattern)
     #[parse("{patt} -> {expr}")]
     Fn {
-        patt: &'a Span<'a, Pat<'a>>,
+        patt: &'a Span<'a, Ident<'a>>,
         expr: &'a Span<'a, Expr<'a>>,
     },
     /// Addition
-    #[parse("{0:2} + {1:1}", nice=2)]
+    #[parse("{0:2} + {1:1}", precedence=2)]
     Add(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
     /// Subtraction
-    #[parse("{0:2} - {1:1}", nice=2)]
+    #[parse("{0:2} - {1:1}", precedence=2)]
     Sub(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
     /// Multiplication
-    #[parse("{0:4} * {1:3}", nice=4)]
+    #[parse("{0:4} * {1:3}", precedence=4)]
     Mul(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
     /// Division
-    #[parse("{0:4} / {1:3}", nice=4)]
+    #[parse("{0:4} / {1:3}", precedence=4)]
     Div(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
     /// Function application
-    #[parse("{0:6} : {1:5}", nice=6)]
+    #[parse("{0:6} : {1:5}", precedence=6)]
     App(&'a Span<'a, Expr<'a>>, &'a Span<'a, Expr<'a>>),
     /// Field (or attribute) access
-    #[parse("{0:8} . {1:7}", nice=8)]
-    Att(&'a Span<'a, Expr<'a>>, &'a Pat<'a>),
+    #[parse("{0:8} . {1:7}", precedence=8)]
+    Att(&'a Span<'a, Expr<'a>>, &'a Ident<'a>),
     /// Array construction
     #[parse("( {0} )")]
     Arr(Arr<'a>),
@@ -48,7 +60,7 @@ pub enum Expr<'a> {
     Scope(&'a Span<'a, Expr<'a>>),
     /// Identity
     #[parse("{0}")]
-    Ident(&'a Span<'a, Pat<'a>>),
+    Ident(&'a Span<'a, Ident<'a>>),
 }
 
 #[derive(Debug, Clone, Copy, ParserImpl, Space)]
@@ -62,15 +74,17 @@ pub enum Arr<'a> {
 #[derive(Debug, Clone, Copy, ParserImpl, Space)]
 pub enum Obj<'a> {
     #[parse("{0} : {1} , {2}")]
-    Many(&'a Pat<'a>, &'a Expr<'a>, &'a Self),
+    Many(&'a Ident<'a>, &'a Expr<'a>, &'a Self),
     #[parse("{0} : {1}")]
-    One(&'a Pat<'a>, &'a Expr<'a>),
+    One(&'a Ident<'a>, &'a Expr<'a>),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Pat<'a>(&'a str);
+pub struct Ident<'a>(&'a str);
 
-impl<'a> ParserImpl<'a> for Pat<'a> {
+impl<'a> Ident<'a> { pub fn to_str(&self) -> &'a str { self.0 } }
+
+impl<'a> ParserImpl<'a> for Ident<'a> {
     fn parser_impl(
         source: Source<'a>, 
         out_arena: &'a Arena,
@@ -93,7 +107,7 @@ impl<'a> ParserImpl<'a> for Pat<'a> {
             })
         } else {
             let ident = out_arena.alloc_str(&source[..len]);
-            Ok((Pat(ident), source.proceed(len)))
+            Ok((Ident(ident), source.proceed(len)))
         } }
     }
 }
@@ -105,10 +119,7 @@ mod test {
 
     #[test]
     fn test_parsing() {
-        let source = Source::new("
-            let f = x -> y -> (x: y, y: x);
-            f:x:y
-        ".trim());
+        let source = Source::new("f:x.y:y.z".trim());
         let out_arena = Arena::new();
         let err_arena = Arena::new();
         println!("{:?}", Expr::parser_impl(source, &out_arena, &err_arena, 0).unwrap());

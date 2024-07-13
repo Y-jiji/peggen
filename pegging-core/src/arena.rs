@@ -82,7 +82,7 @@ mod test {
         let bump = Arena::new();
         let mut a = (Vec::new(), Vec::new());
         let mut b = (Vec::new(), Vec::new());
-        for i in 0..4096 {
+        for _ in 0..4096 {
             let v = A(rng.gen(), rng.gen());
             a.1.push(v);
             let v_ref = unsafe { bump.alloc(v) };

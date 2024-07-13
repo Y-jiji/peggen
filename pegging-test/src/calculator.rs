@@ -21,32 +21,32 @@ impl<'a> ParserImpl<'a> for Expr<'a> {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
         let err_len = unsafe { err_arena.size() };
         let out_len = unsafe { out_arena.size() };
         let chain = List::new();
-        let chain = match Self::parser_impl_add(source, out_arena, err_arena, nice) {
+        let chain = match Self::parser_impl_add(source, out_arena, err_arena, precedence) {
             Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
             Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
         };
-        let chain = match Self::parser_impl_sub(source, out_arena, err_arena, nice) {
+        let chain = match Self::parser_impl_sub(source, out_arena, err_arena, precedence) {
             Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
             Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
         };
-        let chain = match Self::parser_impl_mul(source, out_arena, err_arena, nice) {
+        let chain = match Self::parser_impl_mul(source, out_arena, err_arena, precedence) {
             Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
             Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
         };
-        let chain = match Self::parser_impl_div(source, out_arena, err_arena, nice) {
+        let chain = match Self::parser_impl_div(source, out_arena, err_arena, precedence) {
             Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
             Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
         };
-        let chain = match Self::parser_impl_scope(source, out_arena, err_arena, nice) {
+        let chain = match Self::parser_impl_scope(source, out_arena, err_arena, precedence) {
             Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
             Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
         };
-        let chain = match Self::parser_impl_atom(source, out_arena, err_arena, nice) {
+        let chain = match Self::parser_impl_atom(source, out_arena, err_arena, precedence) {
             Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
             Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
         };
@@ -61,7 +61,7 @@ impl<'a> Expr<'a> {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
         let source = token(source, &err_arena, "(")?;
         let source = Self::space(source)?;
@@ -74,7 +74,7 @@ impl<'a> Expr<'a> {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
         let mut len = 0;
         for c in source[..].chars() {
@@ -100,9 +100,9 @@ impl<'a> Expr<'a> {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16
+        precedence: u16
     ) -> Result<(Self, Source<'a>), Error<'a>> {
-        if nice >= 2 { Err(Error::Precedence)? }
+        if precedence >= 2 { Err(Error::Precedence)? }
         let (_0, source) = Self::parser_impl(source, out_arena, err_arena, 2)?;
         let source = Self::space(source)?;
         let source = token(source, &err_arena, "+")?;
@@ -120,9 +120,9 @@ impl<'a> Expr<'a> {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16
+        precedence: u16
     ) -> Result<(Self, Source<'a>), Error<'a>> {
-        if nice >= 2 { Err(Error::Precedence)? }
+        if precedence >= 2 { Err(Error::Precedence)? }
         let (_0, source) = Self::parser_impl(source, out_arena, err_arena, 2)?;
         let source = Self::space(source)?;
         let source = token(source, &err_arena, "-")?;
@@ -140,9 +140,9 @@ impl<'a> Expr<'a> {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
-        if nice >= 4 { Err(Error::Precedence)? }
+        if precedence >= 4 { Err(Error::Precedence)? }
         let (_0, source) = Self::parser_impl(source, out_arena, err_arena, 4)?;
         let source = Self::space(source)?;
         let source = token(source, &err_arena, "*")?;
@@ -160,9 +160,9 @@ impl<'a> Expr<'a> {
         source: Source<'a>, 
         out_arena: &'a Arena,
         err_arena: &'a Arena,
-        nice: u16,
+        precedence: u16,
     ) -> Result<(Self, Source<'a>), Error<'a>> {
-        if nice >= 4 { Err(Error::Precedence)? }
+        if precedence >= 4 { Err(Error::Precedence)? }
         let (_0, source) = Self::parser_impl(source, out_arena, err_arena, 4)?;
         let source = Self::space(source)?;
         let source = token(source, &err_arena, "/")?;
