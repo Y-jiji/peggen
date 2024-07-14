@@ -8,7 +8,7 @@ keywords = ["parser-tools", "parser", "compiler"]
 category = "compilers"
 workspace = ".."
 repository = "https://github.com/Y-jiji/pratt-gen"
-readme = "README.md"
+readme = "../README.md"
 
 [dependencies]
 pratt-gen-core = { version = "0.1.0", path = "../pratt-gen-core" }

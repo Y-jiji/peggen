@@ -21,6 +21,18 @@ pub enum Json<'a> {
     Obj(&'a Obj<'a>),
     #[parse("[ {0} ]")]
     Arr(&'a Arr<'a>),
+    #[parse("null")]
+    Null(),
+    #[parse("{0}")]
+    Bool(Bool),
+}
+
+#[derive(Clone, Copy, ParesrImpl, Space)]
+pub enum Bool {
+    #[parse("true")]
+    True(),
+    #[parse("false")]
+    False(),
 }
 
 #[derive(Clone, Copy, ParserImpl, Space)]
