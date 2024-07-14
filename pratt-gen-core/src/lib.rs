@@ -12,6 +12,8 @@ pub use token::*;
 pub use space::*;
 pub use span::*;
 pub use primitive::*;
+pub use regex::Regex;
+pub use once_cell::sync::Lazy;
 
 static COUNTER: AtomicU16 = AtomicU16::new(0);
 

@@ -92,7 +92,7 @@ fn prepare_func_body_unnamed(var: &syn::Variant, fmt: Vec<Token>, unnamed: &Punc
     // Check holes and fills match
     let holes = fmt.iter().try_fold(HashSet::new(), |mut set, token| match token {
         Space{..} | Literal{..} => Ok(set),
-        Format((fmt, _bp)) => match fmt.parse::<usize>() {
+        Format((fmt, ..)) | Regex((fmt, ..)) => match fmt.parse::<usize>() {
             Ok(out) if !set.contains(&out) => {set.insert(out); Ok(set)},
             Ok(out) => Err(Error::new_spanned(var, format!("repeated format symbol {{{}}}", out))),
             Err(_) => Err(Error::new_spanned(var, format!("the variant is named, but we get {{{}}}", fmt))),
@@ -112,6 +112,7 @@ fn prepare_func_body_unnamed(var: &syn::Variant, fmt: Vec<Token>, unnamed: &Punc
             println!("rule {name}::{} @ {}; rest {}", #var, source.split, &source[..source[..].chars().next().map(|x| x.len_utf8()).unwrap_or(0)]);
         });
     }
+    // For each token, write a rule
     for token in fmt {match token {
         Literal(literal) => 
             body.extend(quote! {let source = token(source, &err_arena, #literal)?;}),
@@ -122,6 +123,26 @@ fn prepare_func_body_unnamed(var: &syn::Variant, fmt: Vec<Token>, unnamed: &Punc
             let ty = fields[fmt.parse::<usize>().unwrap()].clone();
             body.extend(quote! {
                 let (#id, source) = <#ty>::parser_impl(source, out_arena, err_arena, #bp)?;
+            });
+            args.extend(quote! { #id, });
+        }
+        Regex((fmt, regex)) => {
+            let id = syn::parse_str::<Ident>(&format!("_{fmt}")).unwrap();
+            // TODO: raise error if ty is not &'a str
+            let _ty = fields[fmt.parse::<usize>().unwrap()].clone();
+            body.extend(quote! {
+                let (#id, source) = {
+                    static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(#regex).unwrap());
+                    let Some(by) = REGEX.shortest_match(&source[..]) else {
+                        Err(Error::Mismatch {
+                            range: (source.split, source.split+2), 
+                            token: "<str>", 
+                            piece: unsafe{err_arena.alloc_str(&source[..source[..].chars().next().map(|x| x.len_utf8()).unwrap_or(0)])}
+                        })?
+                    };
+                    let s = unsafe{ out_arena.alloc_str(&source[..by]) };
+                    (s, source.proceed(by))
+                };
             });
             args.extend(quote! { #id, });
         }
@@ -137,8 +158,8 @@ fn prepare_func_body_named(var: &syn::Variant, fmt: Vec<Token>, named: &Punctuat
     use Token::*;
     let holes = fmt.iter().try_fold(HashSet::new(), |mut set, token| match token {
         Space{..} | Literal{..} => Ok(set),
-        Format((fmt, _)) if set.contains(fmt) => Err(Error::new_spanned(var, format!("repeated format symbol {{{}}}", fmt))),
-        Format((fmt, _)) => match fmt.parse::<usize>() {
+        Format((fmt, _)) | Regex((fmt, _)) if set.contains(fmt) => Err(Error::new_spanned(var, format!("repeated format symbol {{{}}}", fmt))),
+        Format((fmt, _)) | Regex((fmt, _)) => match fmt.parse::<usize>() {
             Err(_) => {set.insert(fmt.clone()); Ok(set)},
             Ok(_) => Err(Error::new_spanned(var, format!("the variant is named, but we get {{{}}}", fmt))),
         },
@@ -167,6 +188,27 @@ fn prepare_func_body_named(var: &syn::Variant, fmt: Vec<Token>, named: &Punctuat
             let ty = fields[&fmt].clone();
             body.extend(quote! {
                 let (#id, source) = <#ty>::parser_impl(source, out_arena, err_arena, #bp)?;
+            });
+            args.extend(quote! { #id, });
+        },
+        Regex((fmt, regex)) => {
+            let id = syn::parse_str::<Ident>(&format!("{fmt}")).unwrap();
+            // TODO: raise error if ty is not &'a str
+            let _ty = fields[&fmt].clone();
+            body.extend(quote! {
+                let (#id, source) = {
+                    use pratt_gen::*;
+                    static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(#regex).unwrap());
+                    let Some(by) = REGEX.shortest_match(&source[..]) else {
+                        Err(Error::Mismatch {
+                            range: (source.split, source.split+2), 
+                            token: #regex, 
+                            piece: unsafe{err_arena.alloc_str(&source[..source[..].chars().next().map(|x| x.len_utf8()).unwrap_or(0)])}
+                        })?
+                    };
+                    let s = unsafe{ out_arena.alloc_str(&source[..by]) };
+                    (s, source.proceed(by))
+                };
             });
             args.extend(quote! { #id, });
         }

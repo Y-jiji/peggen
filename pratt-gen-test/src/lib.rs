@@ -62,24 +62,28 @@ pub enum Expr<'a> {
     #[parse("{{ {0} }}")]
     Scope(&'a Span<'a, Expr<'a>>),
     /// Identity
-    #[parse("{0}")]
-    Ident(&'a Span<'a, Ident<'a>>),
+    #[parse("{0:`[a-zA-Z_][a-zA-Z0-9_]*`}")]
+    Ident(&'a str),
 }
 
 #[derive(Debug, Clone, Copy, ParserImpl, Space)]
 pub enum Arr<'a> {
     #[parse("{0} , {1}")]
-    Many(&'a Expr<'a>, &'a Self),
+    Next(&'a Expr<'a>, &'a Self),
     #[parse("{0}")]
-    One(&'a Expr<'a>),
+    Just(&'a Expr<'a>),
+    #[parse("")]
+    Null(),
 }
 
 #[derive(Debug, Clone, Copy, ParserImpl, Space)]
 pub enum Obj<'a> {
-    #[parse("{0} : {1} , {2}")]
-    Many(&'a Ident<'a>, &'a Expr<'a>, &'a Self),
-    #[parse("{0} : {1}")]
-    One(&'a Ident<'a>, &'a Expr<'a>),
+    #[parse("{0:`[a-zA-Z_][a-zA-Z0-9_]+`} : {1} , {2}")]
+    Next(&'a str, &'a Expr<'a>, &'a Self),
+    #[parse("{0:`[a-zA-Z_][a-zA-Z0-9_]+`} : {1}")]
+    Just(&'a str, &'a Expr<'a>),
+    #[parse("")]
+    Null(),
 }
 
 #[cfg(test)]

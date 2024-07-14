@@ -6,6 +6,8 @@ pub enum Token {
     Space,
     #[regex(r"\{[A-Za-z0-9]+(:[0-9]+)?\}", |x| split(x.slice()))]
     Format((String, u16)),
+    #[regex(r"\{[A-Za-z0-9]+:`[^`]*`\}", |x| regex(x.slice()))]
+    Regex((String, String)),
     #[regex(r"(\{\{|\}\}|\{ \}|[^ \{\}])+", |x| escape(x.slice()))]
     Literal(String),
 }
@@ -31,6 +33,18 @@ fn split(fmt: &str) -> (String, u16) {
         let fmt = fmt.split(":").nth(0).unwrap().to_string();
         (fmt, bp)
     }
+}
+
+fn regex(fmt: &str) -> (String, String) {
+    let fmt = fmt.trim_start_matches("{").trim_end_matches("}");
+    let hole = fmt.split(":").nth(0).unwrap().to_string();
+    let regex = &fmt[hole.len()+2..fmt.len()-1];
+    let regex = if !regex.starts_with("^") {
+        format!("^{regex}")
+    } else {
+        regex.to_string()
+    };
+    (hole, regex)
 }
 
 #[cfg(test)]
