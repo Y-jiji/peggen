@@ -1,18 +1,8 @@
 use crate::*;
-use core::{fmt::{Debug, Formatter}, ops::{Deref, DerefMut}};
 
 /// ### Brief
-/// A value of Span<'a, T> is just T with attached range information. 
-#[derive(Clone, Copy)]
-pub struct Span<'a, T> {
-    pub range: (usize, usize),
-    pub value: T,
-    pub phant: PhantomData<&'a ()>
-}
-
-/// ### Brief
-/// When T implements Space<'a>, Space<'a> also holds for Span<'a, T>
-impl<'a, T> Space<'a> for Span<'a, T> where 
+/// Implementation of Space<'a> is automatically handled for &'a T
+impl<'a, T> Space<'a> for &'a T where
     T: Space<'a>
 {
     fn space(input: &'a str, begin: usize) -> usize {
@@ -20,28 +10,22 @@ impl<'a, T> Space<'a> for Span<'a, T> where
     }
 }
 
-/// ### Brief
-/// Attach range information to T
-impl<'a, T> MapFrom<'a, T> for Span<'a, T> {
+impl<'a, T> MapFrom<'a, T> for &'a T where 
+    T: Copy + Sized,
+{
     #[inline(always)]
     fn map(
         _: &'a str, 
-        begin: usize,
-        _: &'a Arena,
+        _: usize,
+        arena: &'a Arena,
         value: T,
-        end: usize,
+        _: usize,
     ) -> Self {
-        Span {
-            range: (begin, end), 
-            value, 
-            phant: PhantomData
-        }
+        arena.alloc(value)
     }
 }
 
-/// ### Brief
-/// Add error to span. 
-impl<'a, T> ErrorImpl<'a> for Span<'a, T> where
+impl<'a, T> ErrorImpl<'a> for &'a T where
     T: ErrorImpl<'a> + Copy + Sized,
 {
     #[inline(always)]
@@ -81,7 +65,7 @@ impl<'a, T> ErrorImpl<'a> for Span<'a, T> where
     }
 }
 
-impl<'a, T> ParseImpl<'a> for Span<'a, T> where
+impl<'a, T> ParseImpl<'a> for &'a T where
     T: ParseImpl<'a> + Space<'a>,
 {
     type Err = T::Err;
@@ -93,25 +77,6 @@ impl<'a, T> ParseImpl<'a> for Span<'a, T> where
         precedence: u16,
     ) -> Result<(Self, usize), Self::Err> {
         let (value, end) = T::parse_impl(input, begin, arena, precedence)?;
-        Ok((Self::map(input, begin, arena, value, end), end))
-    }
-}
-
-impl<'a, T: Debug> Debug for Span<'a, T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:?}", self.value)
-    }
-}
-
-impl<'a, T> Deref for Span<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<'a, T> DerefMut for Span<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
+        Ok((arena.alloc(value), end))
     }
 }

@@ -49,8 +49,7 @@ fn impl_parser(input: TokenStream) -> Result<TokenStream> {
         impl<'a> ParserImpl<'a> for #name<'a> {
             fn parser_impl(
                 source: Source<'a>, 
-                out_arena: &'a Arena,
-                err_arena: &'a Arena,
+                arena: &'a Arena,
                 precedence: u16,
             ) -> Result<(Self, Source<'a>), Error<'a>> {
                 #body
@@ -63,14 +62,13 @@ fn impl_parser(input: TokenStream) -> Result<TokenStream> {
 fn impl_parser_body(arm_names: Vec<syn::Ident>) -> TokenStream {
     let mut body = TokenStream::new();
     body.extend(quote! {
-        let err_len = unsafe { err_arena.size() };
-        let out_len = unsafe { out_arena.size() };
+        let out_len = out_arena.size();
         let chain = List::new();
     });
     for arm in arm_names {body.extend(quote! {
         let chain = match Self::#arm(source, out_arena, err_arena, precedence) {
-            Ok(out) => unsafe {err_arena.pop(err_len); return Ok(out)},
-            Err(e) => unsafe {out_arena.pop(out_len); chain.push(&err_arena, e)},
+            Ok(out) => unsafe {err_arena.shrink_to(err_len); return Ok(out)},
+            Err(e) => unsafe {out_arena.shrink_to(out_len); chain.push(&err_arena, e)},
         };
     })}
     body.extend(quote! {

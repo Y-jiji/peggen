@@ -7,8 +7,9 @@ pub enum Json<'a> {
     Int(i64),
     #[parse("{0}")]
     Float(f64),
-    #[parse("{0}")]
-    Str(&'a str),
+    // TODO: implement string escape
+    // #[parse("{0}")]
+    // Str(&'a str),
     #[parse("{{ {0} }}")]
     Obj(&'a Obj<'a>),
     #[parse("[ {0} ]")]
@@ -17,10 +18,10 @@ pub enum Json<'a> {
 
 #[derive(Clone, Copy, ParserImpl, Space)]
 pub enum Obj<'a> {
-    #[parse("{0} : {1} , {2}")]
-    Next(Ident<'a>, Json<'a>, &'a Obj<'a>),
-    #[parse("{0} : {1}")]
-    Just(Ident<'a>, Json<'a>),
+    #[parse("{0:`[a-zA-Z_][a-zA-Z0-9_]+`} : {1} , {2}")]
+    Next(&'a str, Json<'a>, &'a Self),
+    #[parse("{0:`[a-zA-Z_][a-zA-Z0-9_]+`} : {1}")]
+    Just(&'a str, Json<'a>),
     #[parse("")]
     Null(),
 }
@@ -41,11 +42,11 @@ impl<'a> Iterator for Obj<'a> {
         match *self {
             Self::Next(id, json, that) => {
                 *self = *that;
-                return Some((id.0, json));
+                return Some((id, json));
             }
             Self::Just(id, json) => {
                 *self = Self::Null();
-                return Some((id.0, json));
+                return Some((id, json));
             }
             Self::Null() => None
         }
