@@ -11,9 +11,7 @@ use alloc::boxed::*;
 
 // Export vector and string in arena. 
 mod avec;
-mod astr;
 pub use avec::*;
-pub use astr::*;
 
 #[cfg(test)]
 const N: usize = 512;   // Use smaller N, so tests can run faster. 

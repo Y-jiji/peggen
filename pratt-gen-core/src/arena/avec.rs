@@ -74,6 +74,19 @@ impl<'a, T: 'a> Index<usize> for AVec<'a, T> {
     }
 }
 
+impl<'a> AVec<'a, u8> {
+    pub unsafe fn push_char(&mut self, char: char) {
+        let len = char.len_utf8();
+        let mut byt = [0u8; 2];
+        char.encode_utf8(&mut byt);
+        for i in 0..len { self.push(byt[i]); }
+    }
+    pub unsafe fn push_str(&mut self, str: &str) {
+        // TODO: make this more efficient
+        for &byte in str.as_bytes() { self.push(byte); }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
