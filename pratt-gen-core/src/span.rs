@@ -22,18 +22,20 @@ impl<'a, T> Space<'a> for Span<'a, T> where
 
 /// ### Brief
 /// Attach range information to T
-impl<'a, T> MapFrom<'a, T> for Span<'a, T> {
+impl<'a, X, Y> Map<'a, X> for Span<'a, Y> where
+    Y: Map<'a, X>
+{
     #[inline(always)]
     fn map(
-        _: &'a str, 
+        input: &'a str, 
         begin: usize,
-        _: &'a Arena,
-        value: T,
+        arena: &'a Arena,
+        value: X,
         end: usize,
     ) -> Self {
         Span {
             range: (begin, end), 
-            value, 
+            value: Y::map(input, begin, arena, value, end), 
             phant: PhantomData
         }
     }
@@ -43,6 +45,7 @@ impl<'a, T> MapFrom<'a, T> for Span<'a, T> {
 /// Add error to span. 
 impl<'a, T> ErrorImpl<'a> for Span<'a, T> where
     T: ErrorImpl<'a> + Copy + Sized,
+    T: Map<'a, T>,
 {
     #[inline(always)]
     fn rest(
@@ -81,17 +84,17 @@ impl<'a, T> ErrorImpl<'a> for Span<'a, T> where
     }
 }
 
-impl<'a, T> ParseImpl<'a> for Span<'a, T> where
-    T: ParseImpl<'a> + Space<'a>,
+impl<'a, T, E> ParseImpl<'a, E> for Span<'a, T> where
+    T: ParseImpl<'a, E> + Space<'a> + Map<'a, T>,
+    E: ErrorImpl<'a>,
 {
-    type Err = T::Err;
     #[inline(always)]
     fn parse_impl(
         input: &'a str, 
         begin: usize,
         arena: &'a Arena,
         precedence: u16,
-    ) -> Result<(Self, usize), Self::Err> {
+    ) -> Result<(Self, usize), E> {
         let (value, end) = T::parse_impl(input, begin, arena, precedence)?;
         Ok((Self::map(input, begin, arena, value, end), end))
     }

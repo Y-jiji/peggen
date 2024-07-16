@@ -2,10 +2,9 @@ use crate::*;
 
 /// ### Brief
 /// Implementation for parser. 
-pub trait ParseImpl<'a>: Sized + Space<'a> {
-    /// ### Brief
-    /// Custom parsing error. 
-    type Err: ErrorImpl<'a>;
+pub trait ParseImpl<'a, Err>: Sized + Space<'a> where 
+    Err: ErrorImpl<'a>
+{
     /// ### Brief
     /// Normal mode parser implementation for `Self`. 
     /// 
@@ -23,17 +22,17 @@ pub trait ParseImpl<'a>: Sized + Space<'a> {
         begin: usize,
         arena: &'a Arena,
         precedence: u16,
-    ) -> Result<(Self, usize), Self::Err>;
+    ) -> Result<(Self, usize), Err>;
 }
 
 /// ### Brief
 /// Apply parsing and allocate into arena
-pub fn parse<'a, X: ParseImpl<'a>>(input: &'a str, arena: &'a Arena) -> Result<X, X::Err> {
-    match X::parse_impl(input, 0, arena, 0) {
+pub fn parse<'a, Par: ParseImpl<'a, Err>, Err: ErrorImpl<'a>>(input: &'a str, arena: &'a Arena) -> Result<Par, Err> {
+    match Par::parse_impl(input, 0, arena, 0) {
         Err(error) => Err(error),
         Ok((value, begin)) => {
             if begin == input.len() { Ok(value) }
-            else { Err(X::Err::rest(input, begin, arena)) }
+            else { Err(Err::rest(input, begin, arena)) }
         }
     }
 }

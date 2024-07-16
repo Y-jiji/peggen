@@ -10,23 +10,23 @@ impl<'a, T> Space<'a> for &'a T where
     }
 }
 
-impl<'a, T> MapFrom<'a, T> for &'a T where 
-    T: Copy + Sized,
+impl<'a, X, Y> Map<'a, X> for &'a Y where
+    Y: Map<'a, X>,
 {
-    #[inline(always)]
     fn map(
-        _: &'a str, 
-        _: usize,
+        input: &'a str, 
+        begin: usize,
         arena: &'a Arena,
-        value: T,
-        _: usize,
+        value: X,
+        end: usize,
     ) -> Self {
+        let value = Y::map(input, begin, arena, value, end);
         arena.alloc_val(value)
     }
 }
 
 impl<'a, T> ErrorImpl<'a> for &'a T where
-    T: ErrorImpl<'a> + Copy + Sized,
+    T: ErrorImpl<'a> + Map<'a, T>,
 {
     #[inline(always)]
     fn rest(
@@ -35,7 +35,7 @@ impl<'a, T> ErrorImpl<'a> for &'a T where
         arena: &'a Arena
     ) -> Self {
         let value = T::rest(input, begin, arena);
-        let end = input.len(); 
+        let end = input.len();
         Self::map(input, begin, arena, value, end)
     }
     #[inline(always)]
@@ -65,18 +65,18 @@ impl<'a, T> ErrorImpl<'a> for &'a T where
     }
 }
 
-impl<'a, T> ParseImpl<'a> for &'a T where
-    T: ParseImpl<'a> + Space<'a>,
+impl<'a, T, E> ParseImpl<'a, E> for &'a T where
+    T: ParseImpl<'a, E> + Space<'a> + Map<'a, T>,
+    E: ErrorImpl<'a>,
 {
-    type Err = T::Err;
     #[inline(always)]
     fn parse_impl(
         input: &'a str, 
         begin: usize,
         arena: &'a Arena,
         precedence: u16,
-    ) -> Result<(Self, usize), Self::Err> {
+    ) -> Result<(Self, usize), E> {
         let (value, end) = T::parse_impl(input, begin, arena, precedence)?;
-        Ok((arena.alloc_val(value), end))
+        Ok((Self::map(input, begin, arena, value, end), end))
     }
 }

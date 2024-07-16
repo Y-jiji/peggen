@@ -3,7 +3,8 @@ use crate::*;
 /// ### Brief
 /// Sometimes, a type can match exactly the same pattern as another type. 
 /// In this case, we implement this trait to explicitly state that. 
-pub trait MapFrom<'a, X> {
+/// Colloquially, you can think of Map<'a, X> as superchaged From<X> in rust std-lib. 
+pub trait Map<'a, X>: Sized {
     /// ### Brief
     /// Map a type to another type with parsing information.  
     /// 
@@ -23,16 +24,4 @@ pub trait MapFrom<'a, X> {
         value: X,
         end: usize,
     ) -> Self;
-}
-
-impl<'a, X> MapFrom<'a, X> for X {
-    fn map(
-        _: &'a str, 
-        _: usize,
-        _: &'a Arena,
-        value: X,
-        _: usize,
-    ) -> Self {
-        value
-    }
 }
