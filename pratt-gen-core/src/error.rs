@@ -19,6 +19,14 @@ pub trait ErrorImpl<'a>: Sized {
         expected: &'static str
     ) -> Self;
     /// ### Brief
+    fn message(
+        input: &'a str,
+        begin: usize,
+        arena: &'a Arena,
+        message: &'static str,
+        end: usize
+    ) -> Self;
+    /// ### Brief
     /// Error mode parser implementation for `Self`. 
     /// 
     /// ### Details

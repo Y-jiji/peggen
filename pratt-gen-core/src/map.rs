@@ -62,6 +62,17 @@ macro_rules! DeriveParseImpl {($X: ident) => {
             Self::map(input, begin, arena, value, end)
         }
         #[inline(always)]
+        fn message(
+            input: &'a str, 
+            begin: usize, 
+            arena: &'a Arena,
+            message: &'static str,
+            end: usize,
+        ) -> Self {
+            let value = T::message(input, begin, arena, message, end);
+            Self::map(input, begin, arena, value, begin)
+        }
+        #[inline(always)]
         fn error_impl(
             input: &'a str, 
             begin: usize,

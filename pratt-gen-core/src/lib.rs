@@ -23,6 +23,7 @@ pub use error::*;
 pub use arena::*;
 pub use span::*;
 pub use map::*;
+#[allow(unused_imports)]
 pub use prelude::*;
 
 pub use regex::Regex;

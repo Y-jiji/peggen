@@ -3,7 +3,8 @@ use crate::*;
 type Ref<'a, T> = &'a T;
 
 impl<'a, X, Y> Map<'a, X> for &'a Y where
-    Y: Map<'a, X>,
+    Y: Map<'a, X> + Sized,
+    X: Sized
 {
     fn map(
         input: &'a str, 
