@@ -21,7 +21,7 @@ impl<'a, T> MapFrom<'a, T> for &'a T where
         value: T,
         _: usize,
     ) -> Self {
-        arena.alloc(value)
+        arena.alloc_val(value)
     }
 }
 
@@ -77,6 +77,6 @@ impl<'a, T> ParseImpl<'a> for &'a T where
         precedence: u16,
     ) -> Result<(Self, usize), Self::Err> {
         let (value, end) = T::parse_impl(input, begin, arena, precedence)?;
-        Ok((arena.alloc(value), end))
+        Ok((arena.alloc_val(value), end))
     }
 }

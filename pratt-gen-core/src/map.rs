@@ -1,9 +1,11 @@
+use core::iter::Map;
+
 use crate::*;
 
 /// ### Brief
 /// Sometimes, a type can match exactly the same pattern as another type. 
 /// In this case, we implement this trait to explicitly state that. 
-pub trait MapFrom<'a, T> {
+pub trait MapFrom<'a, X> {
     /// ### Brief
     /// Map a type to another type with parsing information.  
     /// 
@@ -20,7 +22,7 @@ pub trait MapFrom<'a, T> {
         input: &'a str, 
         begin: usize,
         arena: &'a Arena,
-        value: T,
+        value: X,
         end: usize,
     ) -> Self;
 }
