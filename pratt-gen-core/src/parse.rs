@@ -2,7 +2,7 @@ use crate::*;
 
 /// ### Brief
 /// Implementation for parser. 
-pub trait ParseImpl<'a, Err>: Sized + Space<'a> where 
+pub trait ParseImpl<'a, Err>: Sized where 
     Err: ErrorImpl<'a>
 {
     /// ### Brief

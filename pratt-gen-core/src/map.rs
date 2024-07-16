@@ -25,3 +25,71 @@ pub trait Map<'a, X>: Sized {
         end: usize,
     ) -> Self;
 }
+
+#[macro_export]
+macro_rules! DeriveParseImpl {($X: ident) => {
+    impl<'a, T> Space<'a> for $X<'a, T> where 
+        T: Space<'a>
+    {
+        fn space(input: &'a str, begin: usize) -> usize {
+            T::space(input, begin)
+        }
+    }
+
+    impl<'a, T> ErrorImpl<'a> for $X<'a, T> where
+        T: ErrorImpl<'a> + Copy + Sized,
+        T: Map<'a, T>,
+    {
+        #[inline(always)]
+        fn rest(
+            input: &'a str, 
+            begin: usize, 
+            arena: &'a Arena
+        ) -> Self {
+            let value = T::rest(input, begin, arena);
+            let end = input.len(); 
+            Self::map(input, begin, arena, value, end)
+        }
+        #[inline(always)]
+        fn mismatch(
+            input: &'a str, 
+            begin: usize, 
+            arena: &'a Arena,
+            expected: &'static str
+        ) -> Self {
+            let value = T::mismatch(input, begin, arena, expected);
+            let end = begin + expected.len(); 
+            Self::map(input, begin, arena, value, end)
+        }
+        #[inline(always)]
+        fn error_impl(
+            input: &'a str, 
+            begin: usize,
+            arena: &'a Arena,
+            precedence: u16,
+        ) -> Result<(Self, usize), Self> {
+            match T::error_impl(input, begin, arena, precedence) {
+                Ok((value, end)) => 
+                    Ok((Self::map(input, begin, arena, value, end), end)),
+                Err(value) => 
+                    Err(Self::map(input, begin, arena, value, begin))
+            }
+        }
+    }
+
+    impl<'a, T, E> ParseImpl<'a, E> for $X<'a, T> where
+        T: ParseImpl<'a, E> + Map<'a, T>,
+        E: ErrorImpl<'a>,
+    {
+        #[inline(always)]
+        fn parse_impl(
+            input: &'a str, 
+            begin: usize,
+            arena: &'a Arena,
+            precedence: u16,
+        ) -> Result<(Self, usize), E> {
+            let (value, end) = T::parse_impl(input, begin, arena, precedence)?;
+            Ok((Self::map(input, begin, arena, value, end), end))
+        }
+    }
+};}
