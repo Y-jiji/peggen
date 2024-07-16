@@ -16,7 +16,7 @@ pub enum Expr<'a> {
          | Expr + Expr
 */
 
-impl<'a> ParserImpl<'a> for Expr<'a> {
+impl<'a> ParseImpl<'a> for Expr<'a> {
     fn parser_impl(
         source: Source<'a>, 
         out_arena: &'a Arena,

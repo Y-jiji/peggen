@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use pratt_gen::*;
 
-#[derive(Debug, Clone, Copy, ParserImpl, Space)]
+#[derive(Debug, Clone, Copy, ParseImpl, Space)]
 pub enum Json<'a> {
     #[parse("{0}")]
     Int(i64),
@@ -16,7 +16,7 @@ pub enum Json<'a> {
     Arr(&'a Arr<'a>),
 }
 
-#[derive(Clone, Copy, ParserImpl, Space)]
+#[derive(Clone, Copy, ParseImpl, Space)]
 pub enum Obj<'a> {
     #[parse("{0:`[a-zA-Z_][a-zA-Z0-9_]+`} : {1} , {2}")]
     Next(&'a str, Json<'a>, &'a Self),
@@ -26,7 +26,7 @@ pub enum Obj<'a> {
     Null(),
 }
 
-#[derive(Clone, Copy, ParserImpl, Space)]
+#[derive(Clone, Copy, ParseImpl, Space)]
 pub enum Arr<'a> {
     #[parse("{0} , {1}")]
     Next(Json<'a>, &'a Arr<'a>),

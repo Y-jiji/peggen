@@ -1,3 +1,3 @@
 [workspace]
-members     = [ "pratt-gen","pratt-gen-core", "pratt-gen-macros", "pratt-gen-test"]
+members     = ["pratt-gen","pratt-gen-core", "pratt-gen-example", "pratt-gen-macros", "pratt-gen-test"]
 resolver    = "2"

@@ -2,7 +2,7 @@ use crate::*;
 
 /// ### Brief
 /// Implementation for parser. 
-pub trait ParseImpl<'a, Err>: Sized where 
+pub trait ParseImpl<'a, Err>: Sized + Copy where 
     Err: ErrorImpl<'a>
 {
     /// ### Brief
@@ -20,19 +20,20 @@ pub trait ParseImpl<'a, Err>: Sized where
     fn parse_impl(
         input: &'a str, 
         begin: usize,
-        arena: &'a Arena,
+        arena_par: &'a Arena,
+        arena_err: &'a Arena,
         precedence: u16,
     ) -> Result<(Self, usize), Err>;
 }
 
 /// ### Brief
 /// Apply parsing and allocate into arena
-pub fn parse<'a, Par: ParseImpl<'a, Err>, Err: ErrorImpl<'a>>(input: &'a str, arena: &'a Arena) -> Result<Par, Err> {
-    match Par::parse_impl(input, 0, arena, 0) {
+pub fn parse<'a, Par: ParseImpl<'a, Err>, Err: ErrorImpl<'a>>(input: &'a str, arena_par: &'a Arena, arena_err: &'a Arena) -> Result<Par, Err> {
+    match Par::parse_impl(input, 0, arena_par, arena_err, 0) {
         Err(error) => Err(error),
         Ok((value, begin)) => {
             if begin == input.len() { Ok(value) }
-            else { Err(Err::rest(input, begin, arena)) }
+            else { Err(Err::rest(input, begin, arena_err)) }
         }
     }
 }

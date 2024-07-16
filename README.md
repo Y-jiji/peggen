@@ -9,7 +9,7 @@ For example, to parse a json file, you can write the following code, and use `pa
 ```rust
 use pratt_gen::*;
 
-#[derive(Clone, Copy, ParserImpl, Space)]
+#[derive(Clone, Copy, ParseImpl, Space)]
 pub enum Json<'a> {
     #[parse("{0}")]
     Float(f64),
@@ -35,7 +35,7 @@ pub enum Bool {
     False(),
 }
 
-#[derive(Clone, Copy, ParserImpl, Space)]
+#[derive(Clone, Copy, ParseImpl, Space)]
 pub enum Obj<'a> {
     #[parse("{0} : {1} , {2}")]
     Next(Ident<'a>, Json<'a>, &'a Obj<'a>),
@@ -45,7 +45,7 @@ pub enum Obj<'a> {
     Null(),
 }
 
-#[derive(Clone, Copy, ParserImpl, Space)]
+#[derive(Clone, Copy, ParseImpl, Space)]
 pub enum Arr<'a> {
     #[parse("{0} , {1}")]
     Next(Json<'a>, &'a Arr<'a>),
@@ -74,7 +74,7 @@ To handle binary expression with left recursion and precedence, you can do this:
 ```rust
 use pratt_gen::*;
 
-#[derive(Debug, Clone, Copy, ParserImpl, Space)]
+#[derive(Debug, Clone, Copy, ParseImpl, Space)]
 pub enum Expr<'a> {
     #[parse("{0:2} + {1:1}", precedence=2)]
     Add(&'a Expr<'a>, &'a Expr<'a>),

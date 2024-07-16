@@ -4,7 +4,7 @@ use pratt_gen::*;
 // B -> yA | xA | y | A
 // S -> A
 
-#[derive(Debug, ParserImpl, Space, Clone, Copy)]
+#[derive(Debug, ParseImpl, Space, Clone, Copy)]
 pub enum A<'a> {
     #[parse("x{0}")]
     XA(&'a A<'a>),
@@ -14,7 +14,7 @@ pub enum A<'a> {
     X(),
 }
 
-#[derive(Debug, ParserImpl, Space, Clone, Copy)]
+#[derive(Debug, ParseImpl, Space, Clone, Copy)]
 pub enum B<'a> {
     #[parse("y{0}")]
     YA(&'a A<'a>),

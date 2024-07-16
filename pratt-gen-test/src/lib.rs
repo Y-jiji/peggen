@@ -7,7 +7,7 @@
 
 // // reduce:():{range:10}:{x -> y -> push:x:y}
 
-// #[derive(Debug, Clone, Copy, Space, ParserImpl)]
+// #[derive(Debug, Clone, Copy, Space, ParseImpl)]
 // pub enum Expr<'a> {
 //     /// Let binding (allow bind pattern)
 //     #[parse("let {patt} = {bind} ; {expr}")]
@@ -66,7 +66,7 @@
 //     Ident(&'a str),
 // }
 
-// #[derive(Debug, Clone, Copy, ParserImpl, Space)]
+// #[derive(Debug, Clone, Copy, ParseImpl, Space)]
 // pub enum Arr<'a> {
 //     #[parse("{0} , {1}")]
 //     Next(&'a Expr<'a>, &'a Self),
@@ -76,7 +76,7 @@
 //     Null(),
 // }
 
-// #[derive(Debug, Clone, Copy, ParserImpl, Space)]
+// #[derive(Debug, Clone, Copy, ParseImpl, Space)]
 // pub enum Obj<'a> {
 //     #[parse("{0:`[a-zA-Z_][a-zA-Z0-9_]+`} : {1} , {2}")]
 //     Next(&'a str, &'a Expr<'a>, &'a Self),

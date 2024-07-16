@@ -18,4 +18,12 @@ impl<'a, X, Y> Map<'a, X> for &'a Y where
     }
 }
 
+impl<'a, X> Merge<'a> for &'a X where
+    X: Merge<'a>,
+{
+    fn merge(&self, that: &Self, arena: &'a Arena) -> Self {
+        arena.alloc_val(X::merge(self, that, arena))
+    }
+}
+
 DeriveParseImpl!{Ref}

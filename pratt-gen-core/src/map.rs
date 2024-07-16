@@ -4,7 +4,7 @@ use crate::*;
 /// Sometimes, a type can match exactly the same pattern as another type. 
 /// In this case, we implement this trait to explicitly state that. 
 /// Colloquially, you can think of Map<'a, X> as superchaged From<X> in rust std-lib. 
-pub trait Map<'a, X>: Sized {
+pub trait Map<'a, X: Sized>: Sized {
     /// ### Brief
     /// Map a type to another type with parsing information.  
     /// 
@@ -37,7 +37,7 @@ macro_rules! DeriveParseImpl {($X: ident) => {
     }
 
     impl<'a, T> ErrorImpl<'a> for $X<'a, T> where
-        T: ErrorImpl<'a> + Copy + Sized,
+        T: ErrorImpl<'a> + Sized + Merge<'a>,
         T: Map<'a, T>,
     {
         #[inline(always)]
@@ -96,11 +96,12 @@ macro_rules! DeriveParseImpl {($X: ident) => {
         fn parse_impl(
             input: &'a str, 
             begin: usize,
-            arena: &'a Arena,
+            arena_par: &'a Arena,
+            arena_err: &'a Arena,
             precedence: u16,
         ) -> Result<(Self, usize), E> {
-            let (value, end) = T::parse_impl(input, begin, arena, precedence)?;
-            Ok((Self::map(input, begin, arena, value, end), end))
+            let (value, end) = T::parse_impl(input, begin, arena_par, arena_err, precedence)?;
+            Ok((Self::map(input, begin, arena_err, value, end), end))
         }
     }
 };}

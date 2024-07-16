@@ -136,6 +136,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pratt-gen-example"
+version = "0.1.0"
+
+[[package]]
 name = "pratt-gen-macros"
 version = "0.1.0"
 dependencies = [

@@ -2,7 +2,7 @@ use crate::*;
 
 /// ### Brief
 /// Implementation for parser in error mode
-pub trait ErrorImpl<'a>: Sized {
+pub trait ErrorImpl<'a>: Sized + Merge<'a> {
     /// ### Brief
     /// The rest of the unparsed string cannot be parsed
     fn rest(
@@ -13,12 +13,13 @@ pub trait ErrorImpl<'a>: Sized {
     /// ### Brief
     /// Mismatched token. 
     fn mismatch(
-        input: &'a str, 
-        begin: usize, 
+        input: &'a str,
+        begin: usize,
         arena: &'a Arena,
-        expected: &'static str
+        token: &'static str
     ) -> Self;
     /// ### Brief
+    /// Add a message to error. 
     fn message(
         input: &'a str,
         begin: usize,
@@ -48,19 +49,7 @@ pub trait ErrorImpl<'a>: Sized {
 }
 
 /// ### Brief
-/// Eat a token or raise an error. 
-#[inline(always)]
-pub fn token<'a, E: ErrorImpl<'a>>(
-    input: &'a str, 
-    begin: usize,
-    arena: &'a Arena,
-    expected: &'static str,
-) -> Result<usize, E> {
-    let begin = begin.min(input.len());
-    let end = (begin+expected.len()).min(input.len());
-    let piece = &input[begin..end];
-    if expected == piece {
-        return Ok(end)
-    }
-    Err(E::mismatch(input, begin, arena, expected))
+/// Merge two errors into one. 
+pub trait Merge<'a>: Sized + Eq {
+    fn merge(&self, that: &Self, arena: &'a Arena) -> Self;
 }

@@ -41,20 +41,20 @@ fn prepare_attribute(var: &syn::Variant) -> Result<(String, u16)> {
     if matches!(var.fields, syn::Fields::Unit) {
         Err(Error::new_spanned(
             var, 
-            "#[derive(ParserImpl)] can only handle non-unit variants, e.g. A(...) or A{...}"
+            "#[derive(ParseImpl)] can only handle non-unit variants, e.g. A(...) or A{...}"
         ))?
     }
     let Some(Attribute { meta: Meta::List(meta), .. }) = var.attrs.last() else {
         Err(Error::new_spanned(
             var, 
-            format!("#[derive(ParserImpl)] can only handle variants marked with attribute #[parse(pat=\"...\", precedence=...)]")
+            format!("#[derive(ParseImpl)] can only handle variants marked with attribute #[parse(pat=\"...\", precedence=...)]")
         ))?
     };
     let mut meta = meta.tokens.clone().into_iter();
     let Some(proc_macro2::TokenTree::Literal(fmt)) = meta.next() else {
         Err(Error::new_spanned(
             var, 
-            format!("#[derive(ParserImpl)] can only handle variants marked with attribute #[parse(\"...\")]")
+            format!("#[derive(ParseImpl)] can only handle variants marked with attribute #[parse(\"...\")]")
         ))?
     };
     let fmt = fmt.to_string();
