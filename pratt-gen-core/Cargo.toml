@@ -18,3 +18,7 @@ stacker = "0.1.15"
 
 [dev-dependencies]
 rand_xoshiro = "0.6.0"
+
+[features]
+trace = ["std"]
+std = []

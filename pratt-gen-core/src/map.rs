@@ -1,5 +1,3 @@
-use core::iter::Map;
-
 use crate::*;
 
 /// ### Brief
@@ -17,7 +15,7 @@ pub trait MapFrom<'a, X> {
     /// - `end`  : input[end..] is the input after running `X::parser_out_impl` (or `X::parser_err_impl`). 
     /// 
     /// ### Returns
-    /// - transform `X -> Self`
+    /// - Self transformed from X. 
     fn map(
         input: &'a str, 
         begin: usize,
@@ -25,4 +23,16 @@ pub trait MapFrom<'a, X> {
         value: X,
         end: usize,
     ) -> Self;
+}
+
+impl<'a, X> MapFrom<'a, X> for X {
+    fn map(
+        _: &'a str, 
+        _: usize,
+        _: &'a Arena,
+        value: X,
+        _: usize,
+    ) -> Self {
+        value
+    }
 }
