@@ -1,16 +1,14 @@
 #![no_std]
+
 extern crate alloc;
 use core::marker::PhantomData;
-
-// Add println to facilitate testing
-#[cfg(feature="std")]
-extern crate std;
 
 mod r#ref;
 mod space;
 mod error;
 mod parse;
 mod arena;
+mod alist;
 mod span;
 mod map;
 mod prelude;
@@ -21,6 +19,7 @@ pub use space::*;
 pub use parse::*;
 pub use error::*;
 pub use arena::*;
+pub use alist::*;
 pub use span::*;
 pub use map::*;
 #[allow(unused_imports)]

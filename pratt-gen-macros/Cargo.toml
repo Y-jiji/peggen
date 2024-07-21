@@ -1,11 +1,11 @@
 [package]
 name = "pratt-gen-macros"
 description = "Generate recursive-descent & precedence climbing parsers. (macros)"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 keywords = ["parser-tools", "parser", "compiler"]
-category = "compilers"
+# category = "compilers"
 workspace = ".."
 repository = "https://github.com/Y-jiji/pratt-gen"
 

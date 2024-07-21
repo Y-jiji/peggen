@@ -9,15 +9,13 @@ use alloc::vec::*;
 use alloc::alloc::*;
 use alloc::boxed::*;
 
-// Export vector and string in arena. 
-mod avec;
-pub use avec::*;
-
 #[cfg(test)]
-const N: usize = 512;   // Use smaller N, so tests can run faster. 
+const N: usize = 512;       // Use smaller N, so tests can run faster. 
 
 #[cfg(not(test))]
-const N: usize = 4096;  // Bigger page size to mitigate fragmented allocation. 
+const N: usize = 16*1024;   // Bigger page size to mitigate fragmented allocation. 
+
+const CAPACITY: usize = 16;
 
 /// A stack-like arena that allow shrink in unsafe mode
 pub struct Arena {
@@ -30,13 +28,14 @@ pub struct Arena {
 impl Arena {
     /// Create a new arena
     pub fn new() -> Self {
-        let block = unsafe {
+        // The buffer capacity (so when we allocate new buffers, there will be no re-allocations)
+        let mut buffer = Vec::with_capacity(CAPACITY);
+        // Add a first block to arena
+        buffer.push(unsafe {
             Box::from_raw(alloc_zeroed(Layout::from_size_align_unchecked(N, 8)) as *mut _)
-        };
-        Arena {
-            buffer: UnsafeCell::new(vec![block]), 
-            size: UnsafeCell::new(0),
-        }
+        });
+        // Initialize new arena
+        Arena {buffer: UnsafeCell::new(buffer), size: UnsafeCell::new(0)}
     }
     /// Make sure a slice with given size, at least from a
     unsafe fn ensure(&self, mut start: usize, size: usize) -> &mut [u8] {
