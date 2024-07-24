@@ -1,16 +1,16 @@
 use crate::*;
 
 macro_rules! Primitive {($($($X: ident)* : $MESSAGE: literal: $REGEX: literal;)*) => {$($(
-    impl<'a, E> ParseImpl<'a, E> for $X where 
-        E: ErrorImpl<'a>,
-    {
-        fn parse_impl(
+    impl<'a> ParseImpl<'a> for $X {
+        fn parse_impl<E>(
             input: &'a str, 
             begin: usize,
             _: &'a Arena,
             arena_err: &'a Arena,
             _: u16,
-        ) -> Result<(Self, usize), E> {
+        ) -> Result<(Self, usize), E> 
+            where E: ErrorImpl<'a>,
+        {
             static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new($REGEX).unwrap());
             let Some(mat) = REGEX.find(&input[begin..]) else {
                 Err(E::message(input, begin, arena_err, $MESSAGE, begin))?

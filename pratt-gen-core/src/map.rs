@@ -88,18 +88,19 @@ macro_rules! DeriveParseImpl {($X: ident) => {
         }
     }
 
-    impl<'a, T, E> ParseImpl<'a, E> for $X<'a, T> where
-        T: ParseImpl<'a, E> + Map<'a, T>,
-        E: ErrorImpl<'a>,
+    impl<'a, T> ParseImpl<'a> for $X<'a, T> where
+        T: ParseImpl<'a> + Map<'a, T>,
     {
         #[inline(always)]
-        fn parse_impl(
+        fn parse_impl<E>(
             input: &'a str, 
             begin: usize,
             arena_par: &'a Arena,
             arena_err: &'a Arena,
             precedence: u16,
-        ) -> Result<(Self, usize), E> {
+        ) -> Result<(Self, usize), E>
+            where E: ErrorImpl<'a>,
+        {
             let (value, end) = T::parse_impl(input, begin, arena_par, arena_err, precedence)?;
             Ok((Self::map(input, begin, arena_err, value, end), end))
         }
