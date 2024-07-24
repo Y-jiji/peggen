@@ -1,6 +1,7 @@
 use pratt_gen_core::*;
+use pratt_gen_macros::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Map, Space)]
 pub enum Calc<'a> {
     Add(&'a Calc<'a>, &'a Calc<'a>),
     Sub(&'a Calc<'a>, &'a Calc<'a>),
@@ -10,32 +11,16 @@ pub enum Calc<'a> {
 }
 
 impl<'a> ParseImpl<'a> for Calc<'a> {
-    fn parse_impl<Err>(
+    fn parse_impl<Err: ErrorImpl<'a>>(
         input: &'a str, 
         begin: usize,
         arena_par: &'a Arena,
         arena_err: &'a Arena,
         precedence: u16,
-    ) -> Result<(Self, usize), Err> 
-        where Err: ErrorImpl<'a>
-    {
+    ) -> Result<(Self, usize), Err> {
         todo!()
     }
 }
-
-impl<'a> Map<'a, Self> for Calc<'a> {
-    fn map(
-        _: &'a str, 
-        _: usize,
-        _: &'a Arena,
-        value: Self,
-        _: usize,
-    ) -> Self {
-        value
-    }
-}
-
-impl<'a> Space<'a> for Calc<'a> {}
 
 impl<'a> Calc<'a> {
     fn parse_impl_add<Err: ErrorImpl<'a>>(

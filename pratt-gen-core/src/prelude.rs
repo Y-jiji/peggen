@@ -36,7 +36,7 @@ Primitive!{
 /// ### Brief
 /// Standard error type with no handling strategy. 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error<'a> {
+pub enum SimpleError<'a> {
     Rest {
         input: &'a str,
         begin: usize,
@@ -55,11 +55,11 @@ pub enum Error<'a> {
     Unknown,
 }
 
-impl<'a> Error<'a> {
+impl<'a> SimpleError<'a> {
     /// ### Brief
     /// Get the estimated span of current error. 
     pub fn span(self) -> (usize, usize) {
-        use Error::*;
+        use SimpleError::*;
         match self {
             Rest { begin, .. } => (begin, begin),
             Mismatch { begin, .. } => (begin, begin),
@@ -69,7 +69,7 @@ impl<'a> Error<'a> {
     }
 }
 
-impl<'a> Merge<'a> for Error<'a> {
+impl<'a> Merge<'a> for SimpleError<'a> {
     /// ### Brief
     /// Just keep the error with longer reach. 
     /// If the reach is the same, select the error with longer span. 
@@ -92,7 +92,7 @@ impl<'a> Merge<'a> for Error<'a> {
     }
 }
 
-impl<'a> ErrorImpl<'a> for Error<'a> {
+impl<'a> ErrorImpl<'a> for SimpleError<'a> {
     fn rest(
         input: &'a str, 
         begin: usize, 

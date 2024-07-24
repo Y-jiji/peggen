@@ -193,6 +193,7 @@ name = "pratt-gen-example"
 version = "0.2.0"
 dependencies = [
  "pratt-gen-core",
+ "pratt-gen-macros",
 ]
 
 [[package]]

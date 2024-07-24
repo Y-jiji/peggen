@@ -23,7 +23,11 @@ pub fn parse_derive(input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(Space)]
 pub fn space_derive(input: TokenStream) -> TokenStream {
-    todo!()
+    let input = bail!(syn::parse::<DeriveInput>(input));
+    let ident = input.ident;
+    quote! {
+        impl<'a> Space<'a> for #ident<'a> {}    
+    }.into()
 }
 
 #[proc_macro_derive(ErrorImpl, attributes(error, parse))]

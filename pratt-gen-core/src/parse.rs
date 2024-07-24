@@ -15,14 +15,13 @@ pub trait ParseImpl<'a>: Sized + Copy {
     /// ### Returns
     /// - `Ok((Self, split))`: when parsing is successful or error is handled correctly
     /// - `Err(())`: when no rules are applicable
-    fn parse_impl<Err>(
+    fn parse_impl<Err: ErrorImpl<'a>>(
         input: &'a str, 
         begin: usize,
         arena_par: &'a Arena,
         arena_err: &'a Arena,
         precedence: u16,
-    ) -> Result<(Self, usize), Err>
-    where Err: ErrorImpl<'a>;
+    ) -> Result<(Self, usize), Err>;
 }
 
 /// ### Brief

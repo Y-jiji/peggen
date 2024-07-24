@@ -4,4 +4,5 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-pratt-gen-core = { version = "0.2.0", path = "../pratt-gen-core" }
+pratt-gen-core = { version = "*", path = "../pratt-gen-core" }
+pratt-gen-macros = { version = "*", path = "../pratt-gen-macros" }
