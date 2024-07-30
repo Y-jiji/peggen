@@ -1,7 +1,7 @@
 #![no_std]
 extern crate alloc;
 
-mod boxed;
+mod map;
 mod parser;
 
 use core::sync::atomic::AtomicUsize;
