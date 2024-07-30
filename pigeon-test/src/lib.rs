@@ -1,7 +1,7 @@
 #![allow(unused)]
-use pigeon::{Ast, Num, ParseImpl, Space};
+use pigeon::{AstImpl, Num, ParseImpl, Space};
 
-#[derive(Debug, ParseImpl, Num, Ast, Space)]
+#[derive(Debug, ParseImpl, Num, AstImpl, Space)]
 pub enum Expr {
     #[rule("{0:0} + {1:1}", group=0)]
     Add(Box<Expr>, Box<Expr>),
@@ -9,6 +9,8 @@ pub enum Expr {
     Sub(Box<Expr>, Box<Expr>),
     #[rule("{0:1} * {1:2}", group=1)]
     Mul(Box<Expr>, Box<Expr>),
+    #[rule("{0:1} / {1:2}", group=1)]
+    Div(Box<Expr>, Box<Expr>),
     #[rule("{0`[a-z0-9]`}", group=2)]
     Ident(String),
 }

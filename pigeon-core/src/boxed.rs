@@ -13,8 +13,8 @@ impl<const GROUP: usize, const ERROR: bool, T> ParseImpl<GROUP, ERROR> for Box<T
     }
 }
 
-impl<Extra, T> Ast<Extra> for Box<T> 
-    where T: Ast<Extra>
+impl<Extra, T> AstImpl<Extra> for Box<T> 
+    where T: AstImpl<Extra>
 {
     fn ast<'a>(
         input: &'a str, 

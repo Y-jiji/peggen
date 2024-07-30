@@ -27,12 +27,12 @@ pub fn parse_impl_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     output.into()
 }
 
-#[proc_macro_derive(Ast, attributes(rule))]
+#[proc_macro_derive(AstImpl, attributes(rule))]
 pub fn ast_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = bail!(parse::<DeriveInput>(input));
     let builder = bail!(Builder::new(input));
     let mut output = TokenStream::new();
-    output.extend(bail!(builder.ast_build()));
+    output.extend(bail!(builder.ast_impl_build()));
     output.into()
 }
 

@@ -1,11 +1,11 @@
 use crate::*;
 
-pub trait AstBuild {
-    fn ast_build(&self) -> Result<TokenStream>;
+pub trait AstImplBuild {
+    fn ast_impl_build(&self) -> Result<TokenStream>;
 }
 
-impl AstBuild for Builder {
-    fn ast_build(&self) -> Result<TokenStream> {
+impl AstImplBuild for Builder {
+    fn ast_impl_build(&self) -> Result<TokenStream> {
         let this = &self.ident;
         let generics = &self.generics;
         let count = &self.rules.len();
@@ -18,7 +18,7 @@ impl AstBuild for Builder {
             let mut argb = TokenStream::new();
             let mut argv = TokenStream::new();
             // Generate code for converting part of the tags into ast and remove them from stack. 
-            // At the same time, collect typ constraints s.t. Ast<Extra> is implemented for each usage. 
+            // At the same time, collect typ constraints s.t. AstImpl<Extra> is implemented for each usage. 
             for expr in rule.exprs.iter().rev() {
                 fn normalize(arg: &str) -> Result<Ident> {
                     let arg = if arg.chars().all(|arg| arg.is_digit(10)) {
@@ -32,10 +32,10 @@ impl AstBuild for Builder {
                     Fmt::Symbol { arg, typ, .. } => {
                         let arg = normalize(arg)?;
                         argb.extend(quote! {
-                            let (stack, #arg) = <#typ as #_crate::Ast<Extra>>::ast(input, stack, extra);
+                            let (stack, #arg) = <#typ as #_crate::AstImpl<Extra>>::ast(input, stack, extra);
                         });
                         argv.extend(quote! { #arg, });
-                        constraints.extend(quote! { #typ: Ast<Extra>, });
+                        constraints.extend(quote! { #typ: AstImpl<Extra>, });
                     }
                     Fmt::Regex { arg, typ, .. } => {
                         let arg = normalize(arg)?;
@@ -50,7 +50,7 @@ impl AstBuild for Builder {
                             };
                         });
                         argv.extend(quote! { #arg, });
-                        constraints.extend(quote! { #typ: Ast<Extra>, });
+                        constraints.extend(quote! { #typ: AstImpl<Extra>, });
                     }
                     _ => {}
                 }
@@ -71,7 +71,7 @@ impl AstBuild for Builder {
             });
         }
         Ok(quote!{
-            impl<#generics Extra> #_crate::Ast<Extra> for #this<#generics> {
+            impl<#generics Extra> #_crate::AstImpl<Extra> for #this<#generics> {
                 fn ast<'a>(input: &'a str, stack: &'a [#_crate::Tag], extra: &'a Extra) -> (&'a [#_crate::Tag], Self) {
                     if stack.len() == 0 { panic!("empty stack"); }
                     let tag   = &stack[stack.len()-1];

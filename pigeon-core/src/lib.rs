@@ -16,7 +16,7 @@ pub struct Tag {
     pub rule: usize,
 }
 
-pub trait Ast<Extra> {
+pub trait AstImpl<Extra> {
     fn ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
