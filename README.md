@@ -1,4 +1,4 @@
-# Pratt-Gen
+# pigeon
 
 A recursive descent parser generator library that use inlined macros.
 
@@ -7,7 +7,7 @@ A recursive descent parser generator library that use inlined macros.
 For example, to parse a json file, you can write the following code, and use `parse<Json>` to parse a json formatted string. That's it.
 
 ```rust
-use pratt_gen::*;
+use pigeon::*;
 
 #[derive(Clone, Copy, ParseImpl, Space)]
 pub enum Json<'a> {
@@ -72,7 +72,7 @@ Add(&'a Expr<'a>, &'a Expr<'a>),
 To handle binary expression with left recursion and precedence, you can do this:
 
 ```rust
-use pratt_gen::*;
+use pigeon::*;
 
 #[derive(Debug, Clone, Copy, ParseImpl, Space)]
 pub enum Expr<'a> {

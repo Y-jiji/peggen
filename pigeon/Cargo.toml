@@ -1,5 +1,5 @@
 [package]
-name = "pratt-gen"
+name = "pigeon"
 description = "Generate recursive-descent & precedence climbing parsers. "
 version = "0.2.0"
 edition = "2021"
@@ -7,9 +7,9 @@ license = "MIT OR Apache-2.0"
 keywords = ["parser-tools", "parser", "compiler"]
 # category = "compilers"
 workspace = ".."
-repository = "https://github.com/Y-jiji/pratt-gen"
+repository = "https://github.com/Y-jiji/pigeon"
 readme = "../README.md"
 
 [dependencies]
-pratt-gen-core = { version = "0.2.0", path = "../pratt-gen-core" }
-pratt-gen-macros = { version = "0.2.0", path = "../pratt-gen-macros" }
+pigeon-core = { version = "0.2.0", path = "../pigeon-core" }
+pigeon-macros = { version = "0.2.0", path = "../pigeon-macros" }

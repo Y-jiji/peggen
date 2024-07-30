@@ -162,21 +162,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "ppv-lite86"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
-
-[[package]]
-name = "pratt-gen"
+name = "pigeon"
 version = "0.2.0"
 dependencies = [
- "pratt-gen-core",
- "pratt-gen-macros",
+ "pigeon-core",
+ "pigeon-macros",
 ]
 
 [[package]]
-name = "pratt-gen-core"
+name = "pigeon-core"
 version = "0.2.0"
 dependencies = [
  "bytemuck",
@@ -189,31 +183,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "pratt-gen-example"
-version = "0.2.0"
-dependencies = [
- "pratt-gen-core",
- "pratt-gen-macros",
-]
-
-[[package]]
-name = "pratt-gen-macros"
+name = "pigeon-macros"
 version = "0.2.0"
 dependencies = [
  "logos",
+ "once_cell",
  "proc-macro2",
  "quote",
+ "regex",
  "syn",
 ]
 
 [[package]]
-name = "pratt-gen-test"
+name = "pigeon-test"
 version = "0.2.0"
 dependencies = [
  "once_cell",
- "pratt-gen",
+ "pigeon",
  "stacker",
 ]
+
+[[package]]
+name = "ppv-lite86"
+version = "0.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "proc-macro2"
