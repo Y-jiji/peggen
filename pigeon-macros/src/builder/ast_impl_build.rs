@@ -16,7 +16,7 @@ impl AstImplBuild for Builder {
         for (num, rule) in self.rules.iter().enumerate() {
             let variant = &rule.ident;
             let mut argb = TokenStream::new();
-            let mut argv = TokenStream::new();
+            let mut argv = Vec::new();
             // Generate code for converting part of the tags into ast and remove them from stack. 
             // At the same time, collect typ constraints s.t. AstImpl<Extra> is implemented for each usage. 
             for expr in rule.exprs.iter().rev() {
@@ -34,7 +34,7 @@ impl AstImplBuild for Builder {
                         argb.extend(quote! {
                             let (stack, #arg) = <#typ as #_crate::AstImpl<Extra>>::ast(input, stack, extra);
                         });
-                        argv.extend(quote! { #arg, });
+                        argv.push(quote! { #arg, });
                         constraints.extend(quote! { #typ: AstImpl<Extra>, });
                     }
                     Fmt::Regex { arg, typ, .. } => {
@@ -49,12 +49,18 @@ impl AstImplBuild for Builder {
                                 )
                             };
                         });
-                        argv.extend(quote! { #arg, });
+                        argv.push(quote! { #arg, });
                         constraints.extend(quote! { #typ: AstImpl<Extra>, });
                     }
                     _ => {}
                 }
             }
+            argv.reverse();
+            let argv = {
+                let mut stream = TokenStream::new();
+                for arg in argv { stream.extend(arg); }
+                stream
+            };
             // Construct the result ast
             let argv = 
                 if rule.named { quote! { {#argv} } } 
