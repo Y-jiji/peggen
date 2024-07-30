@@ -9,6 +9,7 @@ pub use regex::Regex;
 pub use once_cell::sync::Lazy;
 pub use alloc::vec::Vec;
 pub use crate::parser::Parser;
+pub use stacker as stacker;
 
 #[derive(Debug)]
 pub struct Tag {

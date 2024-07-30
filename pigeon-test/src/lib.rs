@@ -5,7 +5,7 @@ use std::rc::Rc;
 #[derive(Debug, ParseImpl, Num, AstImpl, Space)]
 pub enum Expr {
     #[rule("{0:0} + {1:1}", group=0)]
-    Add(Rc<Box<Expr>>, Box<Expr>),
+    Add(Box<Expr>, Box<Expr>),
     #[rule("{0:0} - {1:1}", group=0)]
     Sub(Box<Expr>, Box<Expr>),
     #[rule("{0:1} * {1:2}", group=1)]
@@ -23,7 +23,7 @@ mod test {
 
     #[test]
     fn expr() {
-        let expr = Parser::<Expr>::parse("1 * 2 - 3 + 4 * 5").unwrap();
+        let expr = Parser::<Expr>::parse("1 * 2 - 3 + 4 * 5 / 6").unwrap();
         println!("{expr:?}");
     }
 }

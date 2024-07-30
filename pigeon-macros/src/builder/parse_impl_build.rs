@@ -35,20 +35,22 @@ impl ParserImplBuild for Builder {
                         trace: &mut Vec<(usize, usize)>,
                         stack: &mut Vec<#_crate::Tag>,
                     ) -> Result<usize, ()> {
-                        let mut last = end;
-                        if stack.last().map(|top| top.span.start == end).unwrap_or(false) {
-                            return Ok(stack.last().unwrap().span.end);
-                        }
-                        for &(begin, symb) in trace.iter().rev() {
-                            if begin < end { break }
-                            if symb != <Self as #_crate::Num>::num(#group) { continue }
-                            Err(())?
-                        }
-                        trace.push((end, <Self as #_crate::Num>::num(#group)));
-                        loop { #body; break }
-                        trace.pop();
-                        if last != end { Ok(last) }
-                        else           { Err(())  }
+                        #_crate::stacker::maybe_grow(32*1024, 1024*1024, || {
+                            let mut last = end;
+                            if stack.last().map(|top| top.span.start == end).unwrap_or(false) {
+                                return Ok(stack.last().unwrap().span.end);
+                            }
+                            for &(begin, symb) in trace.iter().rev() {
+                                if begin < end { break }
+                                if symb != <Self as #_crate::Num>::num(#group) { continue }
+                                Err(())?
+                            }
+                            trace.push((end, <Self as #_crate::Num>::num(#group)));
+                            loop { #body; break }
+                            trace.pop();
+                            if last != end { Ok(last) }
+                            else           { Err(())  }
+                        })
                     }
                 }
             })
