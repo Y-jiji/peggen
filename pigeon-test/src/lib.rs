@@ -1,6 +1,6 @@
 #![allow(unused)]
 use pigeon::{AstImpl, Num, ParseImpl, Space};
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, ParseImpl, Num, AstImpl, Space)]
 pub enum Expr {
@@ -14,6 +14,8 @@ pub enum Expr {
     Div(Box<Expr>, Box<Expr>),
     #[rule("{0`[a-z0-9]`}", group=2)]
     Ident(String),
+    #[rule(r"\( {0} \)", group=2)]
+    Scope(Box<Expr>),
 }
 
 #[cfg(test)]
@@ -23,7 +25,7 @@ mod test {
 
     #[test]
     fn expr() {
-        let expr = Parser::<Expr>::parse("1 * 2 - 3 + 4 * 5 / 6").unwrap();
+        let expr = Parser::<Expr>::parse("1 + 2 * 3 + 4").unwrap();
         println!("{expr:?}");
     }
 }

@@ -14,7 +14,6 @@ impl<T: ParseImpl<0, ERROR> + AstImpl<Extra>, Extra, const ERROR: bool> Parser<T
     }
 }
 
-
 impl<T: ParseImpl<0, ERROR> + AstImpl<()>, const ERROR: bool> Parser<T, (), ERROR> {
     pub fn parse(input: &str) -> Result<T, ()> {
         let mut trace = Vec::new();
@@ -24,4 +23,3 @@ impl<T: ParseImpl<0, ERROR> + AstImpl<()>, const ERROR: bool> Parser<T, (), ERRO
         Ok(T::ast(input, &stack, &()).1)
     }
 }
-

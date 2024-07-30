@@ -1,4 +1,6 @@
+use once_cell::sync::Lazy;
 use quote::ToTokens;
+use regex::Regex;
 
 use crate::*;
 mod ast_impl_build;
@@ -56,8 +58,15 @@ impl Rule {
                 }};
             }
             if let TokenTree::Literal(lit) = token {
+                static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^r#*\"").unwrap());
                 let s = lit.to_string();
-                let s = &s[1..s.len()-1];
+                let s = if let Some(i) = REGEX.find(&s) {
+                    &s[i.len()..s.len()-i.len()+1]
+                } else if s.starts_with("\"") {
+                    &s[1..s.len()-1]
+                } else {
+                    continue;
+                };
                 let (_, exprs) = fmt.many(&s, 0)
                     .map_err(|e| Error::new_spanned(lit.clone(), format!("{e:?}")))?;
                 if rule.exprs.is_empty() {

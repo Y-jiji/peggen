@@ -1,6 +1,6 @@
 [package]
-name = "pigeon-macros"
-description = "Generate recursive-descent & precedence climbing parsers. (macros)"
+name = "pigeon-macs"
+description = "Generate recursive-descent & precedence climbing parsers. (macs)"
 version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -13,7 +13,6 @@ repository = "https://github.com/Y-jiji/pigeon"
 proc-macro = true
 
 [dependencies]
-logos = "0.14.0"
 once_cell = "1.19.0"
 proc-macro2 = "1.0.86"
 quote = "1.0.36"

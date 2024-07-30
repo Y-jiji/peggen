@@ -12,4 +12,4 @@ readme = "../README.md"
 
 [dependencies]
 pigeon-core = { version = "0.2.0", path = "../pigeon-core" }
-pigeon-macros = { version = "0.2.0", path = "../pigeon-macros" }
+pigeon-macs = { version = "0.2.0", path = "../pigeon-macs" }

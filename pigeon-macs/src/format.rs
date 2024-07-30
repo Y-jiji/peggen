@@ -140,14 +140,37 @@ impl FmtParser {
         Ok((input.len(), input[end..].parse::<usize>().map_err(|_| FmtError::BadNumber { found: &input[end..] })?))
     }
     fn space<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
-        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s+").unwrap());
-        let Some(delta) = REGEX.shortest_match(&input[end..]) else { Err(FmtError::NotToken)? };
-        Ok((end+delta, Fmt::Space))
+        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^ +").unwrap());
+        let Some(delta) = REGEX.find(&input[end..]) else { Err(FmtError::NotToken)? };
+        Ok((end+delta.len(), Fmt::Space))
     }
     fn token<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
-        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\\[\{\}\s]|[^\{\}\s])+").unwrap());
-        let Some(delta) = REGEX.shortest_match(&input[end..]) else { Err(FmtError::NotToken)? };
-        Ok((end+delta, Fmt::Token { token: input[end..end+delta].to_string() }))
+        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\\[\(\)\{\}tn\\ ]|[^\(\)\{\} ])+").unwrap());
+        let Some(delta) = REGEX.find(&input[end..]) else { Err(FmtError::NotToken)? };
+        fn unescape(input: &str) -> String {
+            let mut output = String::new();
+            let mut chars = input.chars();
+            while let Some(ch) = chars.next() {
+                if ch != '\\' {
+                    output.push(ch);
+                }
+                else {
+                    let Some(ch) = chars.next() else {
+                        continue;
+                    };
+                    if matches!(ch, '['|']'|'{'|'}'|'('|')'|' '|'\\') {
+                        output.push(ch);
+                    } else if matches!(ch, 't') {
+                        output.push('\t');
+                    } else if matches!(ch, 'n') {
+                        output.push('\n');
+                    }
+                }
+            }
+            output
+        }
+        let token = unescape(&input[end..end+delta.len()]);
+        Ok((end+delta.len(), Fmt::Token { token }))
     }
     fn symbol<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
         let end = Self::eat("{", input, end)?;

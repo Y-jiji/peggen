@@ -1,9 +1,19 @@
+//! # [`pigeon-core`]
+//! 
+//! ## Two-phase Parsing w/o Memorization
+//! In most PEG-based approaches, the target type is constructed during parsing. 
+//! However, some of them might be discarded in the near future, causing unwanted allocation/deallocation. 
+//! In this crate, we seperate parsing and type construction into two phases. 
+//! In the first phase, syntax items are represented as tags, which are storage-agnostic. 
+//! Then, an analysis pass run over the tags and generate final result. 
+
 #![no_std]
 extern crate alloc;
 
 mod map;
 mod parser;
 
+// re-exports
 use core::sync::atomic::AtomicUsize;
 pub use regex::Regex;
 pub use once_cell::sync::Lazy;

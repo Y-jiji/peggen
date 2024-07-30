@@ -1,6 +1,6 @@
 # pigeon
 
-A recursive descent parser generator library that use inlined macros.
+A recursive descent parser generator library that use inlined macs.
 
 ## Json
 
