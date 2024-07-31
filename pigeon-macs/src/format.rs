@@ -6,20 +6,37 @@ use crate::*;
 use std::collections::HashMap;
 use std::result::Result;
 
+#[non_exhaustive]
 pub(crate) enum Fmt {
+    /// A symbol refers to a non-terminal symbol
     Symbol {
         arg: String,
         typ: Type,
         group: usize,
     },
-    Regex {
+    /// A regular expression parses
+    RegExp {
         arg: String,
         typ: Type,
         regex: String,
     },
+    /// Consecutive expressions that push to one argument is grouped together. 
+    /// 
+    /// For one argument, only one segment is allowed. 
+    /// 
+    /// For example, `[0:...] {1} [0:...]` is invalid, because two segements are seperated by a `{1}`. 
+    PushGroup {
+        arg: String,
+        typ: Type,
+        child: Vec<Fmt>,
+        or_not: bool,
+        repeat: bool,
+    },
+    /// A token works like simple literals. 
     Token {
         token: String,
     },
+    /// A consecutive spaces. 
     Space,
 }
 
@@ -27,17 +44,21 @@ impl std::fmt::Debug for Fmt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Fmt::Symbol { arg, typ, group } => {
-                write!(f, "Symbol {{ arg: {arg:?}, typ: {}, group: {group:?} }}", typ.to_token_stream().to_string())
-            },
-            Fmt::Regex { arg, typ, regex } => {
-                write!(f, "Regex {{ arg: {arg:?}, typ: {}, regex: {regex:?} }}", typ.to_token_stream().to_string())
-            },
+                write!(f, "Symbol {{ arg: {arg:?}, typ: {}, group: {group:?} }}", typ.to_token_stream())
+            }
+            Fmt::RegExp { arg, typ, regex } => {
+                write!(f, "Regex {{ arg: {arg:?}, typ: {}, regex: {regex:?} }}", typ.to_token_stream())
+            }
+            Fmt::PushGroup { arg, typ, child, repeat, or_not } => {
+                write!(f, "Push {{ arg: {arg:?}, typ: {}, child: {child:?}, repeat: {repeat}, or_not: {or_not} }}", typ.to_token_stream())
+            }
             Fmt::Token { token } => {
                 write!(f, "Token {{ token: {token:?} }}")
-            },
+            }
             Fmt::Space => {
                 write!(f, "Space")
             }
+            _ => todo!()
         }
     }
 }
@@ -63,7 +84,8 @@ pub enum FmtError<'a> {
     BadNumber {
         found: &'a str, 
     },
-    NotToken
+    NotToken,
+    NotGenerics,
 }
 
 impl FmtParser {
@@ -87,20 +109,24 @@ impl FmtParser {
     pub fn many<'a>(&self, input: &'a str, mut end: usize) -> Result<(usize, Vec<Fmt>), FmtError<'a>> {
         let mut seq = vec![];
         loop {
+            if let Ok((end_, expr)) = self.push(input, end) {
+                seq.push(expr);
+                end = end_; continue;
+            };
             if let Ok((end_, expr)) = self.space(input, end) {
                 seq.push(expr);
                 end = end_; continue;
             };
             if let Ok((end_, expr)) = self.token(input, end) {
-                seq.push(expr); 
+                seq.push(expr);
                 end = end_; continue;
             };
             if let Ok((end_, expr)) = self.symbol(input, end) {
-                seq.push(expr); 
+                seq.push(expr);
                 end = end_; continue;
             };
             if let Ok((end_, expr)) = self.regexp(input, end) {
-                seq.push(expr); 
+                seq.push(expr);
                 end = end_; continue;
             };
             break
@@ -145,7 +171,7 @@ impl FmtParser {
         Ok((end+delta.len(), Fmt::Space))
     }
     fn token<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
-        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\\[\(\)\{\}tn\\ ]|[^\(\)\{\} ])+").unwrap());
+        static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\\[\[\]\{\}tn\\\? ]|[^\[\]\{\}\? ])+").unwrap());
         let Some(delta) = REGEX.find(&input[end..]) else { Err(FmtError::NotToken)? };
         fn unescape(input: &str) -> String {
             let mut output = String::new();
@@ -158,7 +184,7 @@ impl FmtParser {
                     let Some(ch) = chars.next() else {
                         continue;
                     };
-                    if matches!(ch, '['|']'|'{'|'}'|'('|')'|' '|'\\') {
+                    if matches!(ch, '['|']'|'{'|'}'|'('|')'|' '|'\\'|'?') {
                         output.push(ch);
                     } else if matches!(ch, 't') {
                         output.push('\t');
@@ -171,6 +197,56 @@ impl FmtParser {
         }
         let token = unescape(&input[end..end+delta.len()]);
         Ok((end+delta.len(), Fmt::Token { token }))
+    }
+    fn push<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
+        // TODO: better error message
+        // Analyze the options
+        let mut or_not = false;
+        let mut repeat = false;
+        let end = Self::eat("[", input, end)?;
+        let (end, arg, typ) = self.ident(input, end)?;
+        let end = if let Ok(end) = Self::eat("*:", input, end) {
+            repeat = true;
+            end
+        } else if let Ok(end) = Self::eat("?:", input, end) {
+            or_not = true;
+            end
+        } else {
+            Self::eat(":", input, end)?
+        };
+        // Analyze component types and make a sub parser
+        let inner = match &typ {
+            Type::Path(TypePath { path, .. }) => {
+                let last = path.segments.last().ok_or_else(|| FmtError::NotGenerics)?;
+                let PathArguments::AngleBracketed(ref args) = last.arguments else {
+                    Err(FmtError::NotGenerics)?
+                };
+                use GenericArgument::Type as Ty;
+                let arg = args.args.iter()
+                    .filter_map(|arg| if let Ty(arg) = arg { Some(arg) } else { None })
+                    .last()
+                    .ok_or_else(|| FmtError::NotGenerics)?;
+                arg
+            }
+            _ => {
+                return Err(FmtError::NotGenerics)
+            }
+        };
+        let mut map = HashMap::new();
+        match inner {
+            Type::Tuple(tuple) => {
+                for (symb, ty) in tuple.elems.iter().enumerate() {
+                    map.insert(format!("{symb}"), ty.clone());
+                }
+            }
+            other => {
+                map.insert(format!("0"), other.clone());
+            }
+        }
+        let subfmt = FmtParser { map };
+        let (end, child) = subfmt.many(input, end)?;
+        let end = Self::eat("]", input, end)?;
+        Ok((end, Fmt::PushGroup { arg, typ, child, or_not, repeat }))
     }
     fn symbol<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
         let end = Self::eat("{", input, end)?;
@@ -188,6 +264,7 @@ impl FmtParser {
     fn regexp<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
         let end = Self::eat("{", input, end)?;
         let (end, arg, typ) = self.ident(input, end)?;
+        let end = Self::eat(":", input, end)?;
         let (end, cnt) = Self::count("#", input, end);
         let mut end = Self::eat("`", input, end)?;
         let mut range = end..end;
@@ -211,7 +288,7 @@ impl FmtParser {
             break;
         }
         let end = Self::eat("}", input, end)?;
-        Ok((end, Fmt::Regex {
+        Ok((end, Fmt::RegExp {
             typ, arg, 
             regex: input[range].to_string() 
         }))

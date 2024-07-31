@@ -29,7 +29,7 @@ impl AstImplBuild for Builder {
                     parse_str::<Ident>(&arg)
                 }
                 match expr {
-                    Fmt::Symbol { arg, typ, .. } => {
+                    Fmt::Symbol { arg, typ, .. } | Fmt::PushGroup { arg, typ, .. } => {
                         let arg = normalize(arg)?;
                         argb.extend(quote! {
                             let (stack, #arg) = <#typ as #_crate::AstImpl<Extra>>::ast(input, stack, extra);
@@ -37,7 +37,7 @@ impl AstImplBuild for Builder {
                         argv.push(quote! { #arg, });
                         constraints.extend(quote! { #typ: AstImpl<Extra>, });
                     }
-                    Fmt::Regex { arg, typ, .. } => {
+                    Fmt::RegExp { arg, typ, .. } => {
                         let arg = normalize(arg)?;
                         argb.extend(quote! {
                             let (stack, #arg) = {

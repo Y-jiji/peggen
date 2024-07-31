@@ -6,11 +6,15 @@
 //! In this crate, we seperate parsing and type construction into two phases. 
 //! In the first phase, syntax items are represented as tags, which are storage-agnostic. 
 //! Then, an analysis pass run over the tags and generate final result. 
+//! 
+//! ## Variadic Length
+//! 
 
 #![no_std]
 extern crate alloc;
 
 mod map;
+mod tuple;
 mod parser;
 
 // re-exports

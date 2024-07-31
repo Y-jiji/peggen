@@ -12,10 +12,12 @@ pub enum Expr {
     Mul(Box<Expr>, Box<Expr>),
     #[rule("{0:1} / {1:2}", group=1)]
     Div(Box<Expr>, Box<Expr>),
-    #[rule("{0`[a-z0-9]`}", group=2)]
+    #[rule("{0:`[a-z0-9]`}", group=2)]
     Ident(String),
-    #[rule(r"\( {0} \)", group=2)]
+    #[rule(r"( {0} )", group=2)]
     Scope(Box<Expr>),
+    #[rule(r"[0*: x {0} ]", group=2)]
+    Many(Vec<Expr>),
 }
 
 #[cfg(test)]
