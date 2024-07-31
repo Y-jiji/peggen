@@ -21,14 +21,12 @@ impl RulesImplBuild for Builder {
                 let end = <#typ as ParseImpl<#group, ERROR>>::parse_impl(input, end, trace, stack)?;
             },
             Fmt::RegExp { regex, .. } => {
-                let regex = 
-                    if regex.starts_with("^") { regex.clone() } 
-                    else { format!("^{regex}") };
+                let regex = format!("^({regex})");
                 quote! {
                     let end = {
                         let begin = end;
                         static REGEX: #_crate::Lazy<#_crate::Regex> = #_crate::Lazy::new(|| #_crate::Regex::new(#regex).unwrap());
-                        let Some(mat) = REGEX.find(&input[end..]) else {
+                        let Some(mat) = REGEX.find(&input[begin..]) else {
                             Err(())?
                         };
                         let mat = mat.as_str();
@@ -38,48 +36,57 @@ impl RulesImplBuild for Builder {
                     };
                 }
             },
-            _ => todo!()
-            // Fmt::PushGroup { child, or_not, repeat, .. } => {
-            //     let child = child.iter()
-            //         .map(|fmt| self.rules_body_build(fmt))
-            //         .try_fold(TokenStream::new(), |mut a, b| { a.extend(b?); Result::Ok(a) })?;
-            //     if *repeat {
-            //         quote! {
-            //             let end = loop {
-            //                 let mut end = end;
-            //                 // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
-            //                 let mut inner = || -> Result<usize, ()> {
-            //                     #child
-            //                     Ok(end)
-            //                 };
-            //                 if let Ok(end_) = inner() {
-            //                     end = end_;
-            //                 } else {
-            //                     break end
-            //                 }
-            //             };
-            //         }
-            //     }
-            //     else if *or_not {
-            //         quote! {
-            //             let end = {
-            //                 // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
-            //                 let mut inner = || -> Result<usize, ()> {
-            //                     #child
-            //                     Ok(end)
-            //                 };
-            //                 if let Ok(end_) = inner() {
-            //                     end_
-            //                 } else {
-            //                     end
-            //                 }
-            //             };
-            //         }
-            //     }
-            //     else {
-            //         quote! { #child }
-            //     }
-            // }
+            Fmt::PushGroup { children, .. } => {
+                let mut body = TokenStream::new();
+                for (child, flag) in children {
+                    let child = child.iter()
+                        .map(|fmt| self.rules_body_build(fmt))
+                        .try_fold(TokenStream::new(), |mut a, b| { a.extend(b?); Result::Ok(a) })?;
+                    body.extend(match flag {
+                        Flag::Null => quote! {
+                            let end = { #child; end }; 
+                        },
+                        Flag::Repeat => quote! {
+                            let end = {    
+                                let mut end = end;
+                                loop {
+                                    // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
+                                    let size = stack.len();
+                                    if let Ok(end_) = (|| -> Result<usize, ()> { #child; Ok(end) })() {
+                                        end = end_;
+                                        count += 1;
+                                    } else {
+                                        stack.resize_with(size, || unreachable!());
+                                        break end 
+                                    }
+                                }
+                            };
+                        },
+                        Flag::OrNot => quote! {
+                            let end = {
+                                let size = stack.len();
+                                // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
+                                if let Ok(end_) = (|| -> Result<usize, ()> { #child; Ok(end) })() {
+                                    count += 1;
+                                    end_
+                                } else {
+                                    stack.resize_with(size, || unreachable!());
+                                    end
+                                }
+                            };
+                        }
+                    });
+                }
+                quote! {
+                    let end = {
+                        let begin = end;
+                        let mut count = 0usize;
+                        #body;
+                        stack.push(#_crate::Tag { rule: count, span: begin..end });
+                        end
+                    };
+                }
+            }
         })
     }
     fn rules_impl_build(&self) -> Result<TokenStream> {
@@ -104,8 +111,8 @@ impl RulesImplBuild for Builder {
                     ) -> Result<usize, ()> {
                         let size = stack.len();
                         let rule = <Self as #_crate::Num>::num(#rule);
+                        let begin = end;
                         let mut inner = || -> Result<usize, ()> {
-                            let begin = end;
                             #body
                             stack.push(#_crate::Tag { rule, span: begin..end });
                             return Ok(end);
@@ -114,9 +121,9 @@ impl RulesImplBuild for Builder {
                             Ok(end) if end > last => {
                                 Ok(end)
                             },
-                            Err(()) | Ok(..) => {    
+                            Err(()) | Ok(..) => {
                                 stack.resize_with(size, || unreachable!()); 
-                                Err(()) 
+                                Err(())
                             }
                         }
                     }

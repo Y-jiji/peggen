@@ -22,4 +22,11 @@ impl<T: ParseImpl<0, ERROR> + AstImpl<()>, const ERROR: bool> Parser<T, (), ERRO
         <T as ParseImpl<0, ERROR>>::parse_impl(input, end, &mut trace, &mut stack)?;
         Ok(T::ast(input, &stack, &()).1)
     }
+    pub fn sequence(input: &str) -> Result<Vec<Tag>, ()> {
+        let mut trace = Vec::new();
+        let mut stack = Vec::new();
+        let end = 0;
+        <T as ParseImpl<0, ERROR>>::parse_impl(input, end, &mut trace, &mut stack)?;
+        Ok(stack)
+    }
 }

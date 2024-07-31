@@ -57,7 +57,7 @@ impl std::fmt::Debug for Fmt {
                 write!(f, "Regex {{ arg: {arg:?}, typ: {}, regex: {regex:?} }}", typ.to_token_stream())
             }
             Fmt::PushGroup { arg, typ, children: child} => {
-                write!(f, "Push {{ arg: {arg:?}, typ: {}, child: {child:?} }}", typ.to_token_stream())
+                write!(f, "PushGroup {{ arg: {arg:?}, typ: {}, child: {child:?} }}", typ.to_token_stream())
             }
             Fmt::Token { token } => {
                 write!(f, "Token {{ token: {token:?} }}")
@@ -223,17 +223,17 @@ impl FmtParser {
         // TODO: better error message
         // Analyze the options
         let mut flag = Flag::Null;
-        let end = Self::eat("[", input, end)?;
-        let (end, arg, typ) = self.ident(input, end)?;
-        let end = if let Ok(end) = Self::eat("*:", input, end) {
+        let end = if let Ok(end) = Self::eat("[*", input, end) {
             flag = Flag::Repeat;
             end
-        } else if let Ok(end) = Self::eat("?:", input, end) {
+        } else if let Ok(end) = Self::eat("[?", input, end) {
             flag = Flag::OrNot;
             end
         } else {
-            Self::eat(":", input, end)?
+            Self::eat("[", input, end)?
         };
+        let (end, arg, typ) = self.ident(input, end)?;
+        let end = Self::eat(":", input, end)?;
         // Analyze component types and make a sub parser
         let inner = match &typ {
             Type::Path(TypePath { path, .. }) => {

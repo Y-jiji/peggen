@@ -13,10 +13,13 @@
 #![no_std]
 extern crate alloc;
 
+mod parser;
+mod prepend;
 mod map;
 mod tuple;
-mod parser;
+mod string;
 
+pub use prepend::*;
 // re-exports
 use core::sync::atomic::AtomicUsize;
 pub use regex::Regex;

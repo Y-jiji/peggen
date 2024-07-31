@@ -117,8 +117,6 @@ impl std::fmt::Debug for Builder {
     }
 }
 
-pub(crate) const CRATE: &str = "pigeon";
-
 impl Builder {
     pub fn new(input: DeriveInput) -> Result<Self> {
         let mut this = Builder {

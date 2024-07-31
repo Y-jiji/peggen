@@ -13,3 +13,7 @@ readme = "../README.md"
 [dependencies]
 pigeon-core = { version = "0.2.0", path = "../pigeon-core" }
 pigeon-macs = { version = "0.2.0", path = "../pigeon-macs" }
+
+[features]
+trace = ["std"]
+std = []

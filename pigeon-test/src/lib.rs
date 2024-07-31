@@ -1,8 +1,10 @@
 #![allow(unused)]
-use pigeon::{AstImpl, Num, ParseImpl, Space};
+use pigeon::{AstImpl, Num, ParseImpl, Prepend, Space};
 use std::sync::Arc;
 
-#[derive(Debug, ParseImpl, Num, AstImpl, Space)]
+mod json;
+
+#[derive(Debug, ParseImpl, AstImpl, Num, Space)]
 pub enum Expr {
     #[rule("{0:0} + {1:1}", group=0)]
     Add(Box<Expr>, Box<Expr>),
@@ -16,8 +18,6 @@ pub enum Expr {
     Ident(String),
     #[rule(r"( {0} )", group=2)]
     Scope(Box<Expr>),
-    // #[rule(r"[0*: x {0} ]", group=2)]
-    // Many(Vec<Expr>),
 }
 
 #[cfg(test)]

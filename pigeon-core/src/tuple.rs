@@ -1,9 +1,9 @@
 use crate::*;
 
 macro_rules! Impl {
-    ($($($T: ident)*;)*) => {$(
-        impl<Extra, $($T, )*> AstImpl<Extra> for ($($T, )*)
-            where $($T: AstImpl<Extra>, )*
+    ($($($A: ident)*, $($B: ident)*;)*) => {$(
+        impl<Extra, $($A, )*> AstImpl<Extra> for ($($A, )*)
+            where $($A: AstImpl<Extra>, )*
         {
             fn ast<'a>(
                 input: &'a str, 
@@ -11,20 +11,21 @@ macro_rules! Impl {
                 extra: &'a Extra
             ) -> (&'a [Tag], Self) {
                 $(
-                    let (stack, casey::lower!($T)) = $T::ast(input, stack, extra);
+                    // Because tag code is suffix coding, we have to parse from tail to head
+                    let (stack, casey::lower!($B)) = $B::ast(input, stack, extra);
                 )*
-                (stack, ($(casey::lower!($T), )*))
+                (stack, ($(casey::lower!($A), )*))
             }
         }
     )*};
 }
 
 Impl!(
-    A;
-    A B;
-    A B C;
-    A B C D;
-    A B C D E;
-    A B C D E F;
-    A B C D E F G;
+    A, A;
+    A B, B A;
+    A B C, C B A;
+    A B C D, D C B A;
+    A B C D E, E D C B A;
+    A B C D E F, F E D C B A;
+    A B C D E F G, G F E D C B A;
 );
