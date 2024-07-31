@@ -142,6 +142,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pigeon-impl"
+version = "0.1.0"
+
+[[package]]
 name = "pigeon-macs"
 version = "0.2.0"
 dependencies = [

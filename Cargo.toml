@@ -1,3 +1,3 @@
 [workspace]
-members     = ["pigeon","pigeon-core", "pigeon-macs", "pigeon-test"]
+members     = ["pigeon","pigeon-core", "pigeon-impl", "pigeon-macs", "pigeon-test"]
 resolver    = "2"
