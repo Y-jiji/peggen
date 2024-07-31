@@ -25,12 +25,12 @@ pub(crate) enum Fmt {
     /// For one argument, only one segment is allowed. 
     /// 
     /// For example, `[0:...] {1} [0:...]` is invalid, because two segements are seperated by a `{1}`. 
+    /// 
+    /// tag.rule works as a counter. 
     PushGroup {
         arg: String,
         typ: Type,
-        child: Vec<Fmt>,
-        or_not: bool,
-        repeat: bool,
+        children: Vec<(Vec<Fmt>, Flag)>,
     },
     /// A token works like simple literals. 
     Token {
@@ -38,6 +38,13 @@ pub(crate) enum Fmt {
     },
     /// A consecutive spaces. 
     Space,
+}
+
+#[derive(Debug)]
+pub(crate) enum Flag {
+    Null,
+    OrNot,
+    Repeat,
 }
 
 impl std::fmt::Debug for Fmt {
@@ -49,8 +56,8 @@ impl std::fmt::Debug for Fmt {
             Fmt::RegExp { arg, typ, regex } => {
                 write!(f, "Regex {{ arg: {arg:?}, typ: {}, regex: {regex:?} }}", typ.to_token_stream())
             }
-            Fmt::PushGroup { arg, typ, child, repeat, or_not } => {
-                write!(f, "Push {{ arg: {arg:?}, typ: {}, child: {child:?}, repeat: {repeat}, or_not: {or_not} }}", typ.to_token_stream())
+            Fmt::PushGroup { arg, typ, children: child} => {
+                write!(f, "Push {{ arg: {arg:?}, typ: {}, child: {child:?} }}", typ.to_token_stream())
             }
             Fmt::Token { token } => {
                 write!(f, "Token {{ token: {token:?} }}")
@@ -58,7 +65,6 @@ impl std::fmt::Debug for Fmt {
             Fmt::Space => {
                 write!(f, "Space")
             }
-            _ => todo!()
         }
     }
 }
@@ -109,7 +115,7 @@ impl FmtParser {
     pub fn many<'a>(&self, input: &'a str, mut end: usize) -> Result<(usize, Vec<Fmt>), FmtError<'a>> {
         let mut seq = vec![];
         loop {
-            if let Ok((end_, expr)) = self.push(input, end) {
+            if let Ok((end_, expr)) = self.push_group(input, end) {
                 seq.push(expr);
                 end = end_; continue;
             };
@@ -198,18 +204,32 @@ impl FmtParser {
         let token = unescape(&input[end..end+delta.len()]);
         Ok((end+delta.len(), Fmt::Token { token }))
     }
-    fn push<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
+    fn push_group<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
+        let (mut end, arg, typ, child, flag) = self.push_item(input, end)?;
+        let mut children = vec![(child, flag)];
+        loop {
+            let Ok((end_, arg_, _, child, flag)) = self.push_item(input, end) else {
+                break
+            };
+            if arg_ != arg {
+                break
+            };
+            end = end_;
+            children.push((child, flag));
+        }
+        Ok((end, Fmt::PushGroup { arg, typ, children }))
+    }
+    fn push_item<'a>(&self, input: &'a str, end: usize) -> Result<(usize, String, Type, Vec<Fmt>, Flag), FmtError<'a>> {
         // TODO: better error message
         // Analyze the options
-        let mut or_not = false;
-        let mut repeat = false;
+        let mut flag = Flag::Null;
         let end = Self::eat("[", input, end)?;
         let (end, arg, typ) = self.ident(input, end)?;
         let end = if let Ok(end) = Self::eat("*:", input, end) {
-            repeat = true;
+            flag = Flag::Repeat;
             end
         } else if let Ok(end) = Self::eat("?:", input, end) {
-            or_not = true;
+            flag = Flag::OrNot;
             end
         } else {
             Self::eat(":", input, end)?
@@ -244,9 +264,9 @@ impl FmtParser {
             }
         }
         let subfmt = FmtParser { map };
-        let (end, child) = subfmt.many(input, end)?;
+        let (end, children) = subfmt.many(input, end)?;
         let end = Self::eat("]", input, end)?;
-        Ok((end, Fmt::PushGroup { arg, typ, child, or_not, repeat }))
+        Ok((end, arg, typ, children, flag))
     }
     fn symbol<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
         let end = Self::eat("{", input, end)?;

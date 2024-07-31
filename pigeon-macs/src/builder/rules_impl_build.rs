@@ -38,47 +38,48 @@ impl RulesImplBuild for Builder {
                     };
                 }
             },
-            Fmt::PushGroup { child, or_not, repeat, .. } => {
-                let child = child.iter()
-                    .map(|fmt| self.rules_body_build(fmt))
-                    .try_fold(TokenStream::new(), |mut a, b| { a.extend(b?); Result::Ok(a) })?;
-                if *repeat {
-                    quote! {
-                        let end = loop {
-                            let mut end = end;
-                            // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
-                            let mut inner = || -> Result<usize, ()> {
-                                #child
-                                Ok(end)
-                            };
-                            if let Ok(end_) = inner() {
-                                end = end_;
-                            } else {
-                                break end
-                            }
-                        };
-                    }
-                }
-                else if *or_not {
-                    quote! {
-                        let end = {
-                            // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
-                            let mut inner = || -> Result<usize, ()> {
-                                #child
-                                Ok(end)
-                            };
-                            if let Ok(end_) = inner() {
-                                end_
-                            } else {
-                                end
-                            }
-                        };
-                    }
-                }
-                else {
-                    quote! { #child }
-                }
-            }
+            _ => todo!()
+            // Fmt::PushGroup { child, or_not, repeat, .. } => {
+            //     let child = child.iter()
+            //         .map(|fmt| self.rules_body_build(fmt))
+            //         .try_fold(TokenStream::new(), |mut a, b| { a.extend(b?); Result::Ok(a) })?;
+            //     if *repeat {
+            //         quote! {
+            //             let end = loop {
+            //                 let mut end = end;
+            //                 // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
+            //                 let mut inner = || -> Result<usize, ()> {
+            //                     #child
+            //                     Ok(end)
+            //                 };
+            //                 if let Ok(end_) = inner() {
+            //                     end = end_;
+            //                 } else {
+            //                     break end
+            //                 }
+            //             };
+            //         }
+            //     }
+            //     else if *or_not {
+            //         quote! {
+            //             let end = {
+            //                 // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
+            //                 let mut inner = || -> Result<usize, ()> {
+            //                     #child
+            //                     Ok(end)
+            //                 };
+            //                 if let Ok(end_) = inner() {
+            //                     end_
+            //                 } else {
+            //                     end
+            //                 }
+            //             };
+            //         }
+            //     }
+            //     else {
+            //         quote! { #child }
+            //     }
+            // }
         })
     }
     fn rules_impl_build(&self) -> Result<TokenStream> {

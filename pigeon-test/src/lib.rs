@@ -16,8 +16,8 @@ pub enum Expr {
     Ident(String),
     #[rule(r"( {0} )", group=2)]
     Scope(Box<Expr>),
-    #[rule(r"[0*: x {0} ]", group=2)]
-    Many(Vec<Expr>),
+    // #[rule(r"[0*: x {0} ]", group=2)]
+    // Many(Vec<Expr>),
 }
 
 #[cfg(test)]
