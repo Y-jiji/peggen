@@ -4,8 +4,8 @@ use pigeon::{AstImpl, Num, ParseImpl, Prepend, Space};
 
 #[derive(Debug, Num, ParseImpl, AstImpl, Space)]
 pub enum Json {
-    #[rule("{0:`[0-9]|[1-9][0-9]*`}")]
-    Int(u64),
+    #[rule("{0:`0|-?[1-9][0-9]*`}")]
+    Int(i64),
     #[rule("{0:`false|true`}")]
     Bool(bool),
     #[rule(r"\{ [*0: {0:`[a-zA-Z]+`} : {1} , ][?0: {0:`[a-zA-Z]+`} : {1} ] \}")]

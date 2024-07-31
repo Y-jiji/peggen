@@ -5,10 +5,7 @@
 //! However, some of them might be discarded in the near future, causing unwanted allocation/deallocation. 
 //! In this crate, we seperate parsing and type construction into two phases. 
 //! In the first phase, syntax items are represented as tags, which are storage-agnostic. 
-//! Then, an analysis pass run over the tags and generate final result. 
-//! 
-//! ## Variadic Length
-//! 
+//! Then, an analysis pass run over the tags and generate a final result. 
 
 #![no_std]
 extern crate alloc;
