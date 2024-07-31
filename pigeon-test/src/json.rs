@@ -4,7 +4,7 @@ use pigeon::{AstImpl, Num, ParseImpl, Prepend, Space};
 
 #[derive(Debug, Num, ParseImpl, AstImpl, Space)]
 pub enum Json {
-    #[rule("{0:`[0-9]|([1-9][0-9]*)`}")]
+    #[rule("{0:`[0-9]|[1-9][0-9]*`}")]
     Int(u64),
     #[rule("{0:`false|true`}")]
     Bool(bool),
@@ -19,11 +19,11 @@ pub enum Json {
 pub struct RVec<T>(Vec<T>);
 
 impl<T, Extra> Prepend<Extra> for RVec<T> {
-    type T = T;
+    type Item = T;
     fn empty() -> Self {
         Self(vec![])
     }
-    fn prepend(&mut self, value: Self::T, extra: &Extra) {
+    fn prepend(&mut self, value: Self::Item, extra: &Extra) {
         self.0.push(value);
     }
 }

@@ -1,5 +1,5 @@
 pub trait Prepend<Extra> {
-    type T;
+    type Item;
     fn empty() -> Self;
-    fn prepend(&mut self, value: Self::T, extra: &Extra);
+    fn prepend(&mut self, value: Self::Item, extra: &Extra);
 }
