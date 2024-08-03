@@ -1,6 +1,6 @@
 [package]
 name = "pigeon-macs"
-description = "Generate recursive-descent & precedence climbing parsers. (macs)"
+description = "Generate recursive-descent & precedence climbing parsers. (macros)"
 version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"

@@ -1,7 +1,14 @@
 [package]
 name = "pigeon-impl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "Generate recursive-descent & precedence climbing parsers. (extra implementations)"
+license = "MIT OR Apache-2.0"
+keywords = ["parser-tools", "parser", "compiler"]
+# category = "compilers"
+workspace = ".."
+repository = "https://github.com/Y-jiji/pigeon"
+readme = "../README.md"
 
 [dependencies]
 bumpalo = { version = "3.16.0", features = ["boxed", "collections"] }

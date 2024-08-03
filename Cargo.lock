@@ -150,8 +150,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pigeon-examples"
+version = "0.2.0"
+dependencies = [
+ "bumpalo",
+ "once_cell",
+ "pigeon",
+ "stacker",
+]
+
+[[package]]
 name = "pigeon-impl"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bumpalo",
  "pigeon-core",
@@ -167,16 +177,6 @@ dependencies = [
  "quote",
  "regex",
  "syn 2.0.70",
-]
-
-[[package]]
-name = "pigeon-test"
-version = "0.2.0"
-dependencies = [
- "bumpalo",
- "once_cell",
- "pigeon",
- "stacker",
 ]
 
 [[package]]
