@@ -14,7 +14,7 @@ impl NumBuild for Builder {
         // The total count or rules/groups (in case that groups are more than rules)
         let count = self.rules.len().max(self.group+1);
         // The generic parameters
-        let generics = &self.generics;
+        let generics = &self.generics.params;
         Ok(quote! {
             impl<#generics> #_crate::Num for #this<#generics> {
                 // Implement rule counting using static trick. 

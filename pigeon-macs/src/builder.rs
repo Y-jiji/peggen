@@ -112,6 +112,8 @@ pub(crate) struct Builder {
     is_enum: bool,
     /// The identity of this type
     ident: Ident,
+    /// The attributes attached to type
+    attrs: Vec<Attribute>,
     /// The generics of this type
     generics: Generics,
 }
@@ -129,12 +131,16 @@ impl Builder {
             rules: vec![],
             group: 0,
             is_enum: false,
+            attrs: input.attrs.clone(),
             ident: input.ident.clone(),
             generics: input.generics.clone()
         };
         match input.data {
             Data::Struct(r#struct) => {
                 for attr in input.attrs {
+                    if attr.path().to_token_stream().to_string() != "rule" {
+                        continue;
+                    }
                     this.add_rule(Rule::new(
                         r#struct.fields.clone(), 
                         input.ident.clone(), 

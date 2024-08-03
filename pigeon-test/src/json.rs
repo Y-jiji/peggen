@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use pigeon::*;
 
-#[derive(Debug, Num, ParseImpl, EnumAstImpl, Space)]
+#[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
 pub enum Json {
     #[rule("{0:`false|true`}")]
     Bool(bool),

@@ -1,3 +1,5 @@
+use quote::ToTokens;
+
 use crate::*;
 
 pub trait RulesImplBuild {
@@ -103,6 +105,10 @@ impl RulesImplBuild for Builder {
             let _crate = parse_str::<Ident>(CRATE).unwrap();
             let this = &self.ident;
             let generics = &self.generics.params;
+            let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
+            let generics = 
+                if !comma && !generics.is_empty() { quote! { #generics, } }
+                else                              { quote! { #generics  } };
             let variant = &self.rules[rule].ident;
             // Add trace if trace presents
             let trace_prolog = if self.rules[rule].trace { quote! {

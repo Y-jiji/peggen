@@ -7,9 +7,7 @@ impl<Extra: Copy> AstImpl<Extra> for String {
         input: &'a str, 
         stack: &'a [Tag], 
         _: Extra
-    ) -> (&'a [Tag], Self) 
-    where Extra: 'a
-    {
+    ) -> (&'a [Tag], Self) {
         let tag = &stack[stack.len()-1];
         (
             &stack[..stack.len()-1],

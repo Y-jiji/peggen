@@ -4,7 +4,7 @@ mod builder;
 use fmtparser::*;
 use builder::*;
 use syn::*;
-use quote::quote;
+use quote::{quote, ToTokens};
 use proc_macro2::*;
 
 // A simple macro that eject error variants into compile error. 
@@ -29,7 +29,7 @@ pub fn parse_impl_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 }
 
 /// Generate AstImpl trait from rule attributes
-#[proc_macro_derive(EnumAstImpl, attributes(rule))]
+#[proc_macro_derive(EnumAstImpl, attributes(rule, with))]
 pub fn ast_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = bail!(parse::<DeriveInput>(input));
     let builder = bail!(Builder::new(input));
@@ -50,19 +50,17 @@ pub fn prepend_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             Self: Prepend<Extra>,
             <Self as Prepend<Extra>>::Item: AstImpl<Extra>
         {
-            fn ast<'a>(
-                input: &'a str, 
-                stack: &'a [#_crate::Tag], 
-                extra: Extra
-            ) -> (&'a [#_crate::Tag], Self) 
-                where Extra: 'a
-            {
+            fn ast<'lifetime>(
+                input: &'lifetime str, 
+                stack: &'lifetime [#_crate::Tag], 
+                with: Extra
+            ) -> (&'lifetime [#_crate::Tag], Self) {
                 let tag = &stack[stack.len()-1];
                 let mut stack = &stack[..stack.len()-1];
-                let mut this = <Self as Prepend<Extra>>::empty(extra);
+                let mut this = <Self as Prepend<Extra>>::empty(with);
                 for i in 0..tag.rule {
-                    let (stack_, value) = <<Self as Prepend<Extra>>::Item as AstImpl<Extra>>::ast(input, stack, extra);
-                    this.prepend(value, extra);
+                    let (stack_, value) = <<Self as Prepend<Extra>>::Item as AstImpl<Extra>>::ast(input, stack, with);
+                    this.prepend(value, with);
                     stack = stack_;
                 }
                 (stack, this)
@@ -84,7 +82,12 @@ pub fn num_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn space_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = bail!(syn::parse::<DeriveInput>(input));
     let ident = input.ident;
+    let generics = input.generics.params;
+    let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
+    let generics = 
+        if !comma && !generics.is_empty() { quote! { #generics, } }
+        else                              { quote! { #generics  } };
     quote! {
-        impl Space for #ident {}    
+        impl<#generics> Space for #ident<#generics> {}
     }.into()
 }

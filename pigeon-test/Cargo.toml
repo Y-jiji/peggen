@@ -4,6 +4,7 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
+bumpalo = { version = "3.16.0", features = ["boxed"] }
 once_cell = "1.19.0"
 pigeon = { version = "0.2.0", path = "../pigeon", features = ["trace"] }
 stacker = "0.1.15"

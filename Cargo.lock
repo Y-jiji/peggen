@@ -173,6 +173,7 @@ dependencies = [
 name = "pigeon-test"
 version = "0.2.0"
 dependencies = [
+ "bumpalo",
  "once_cell",
  "pigeon",
  "stacker",

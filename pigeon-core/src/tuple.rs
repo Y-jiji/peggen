@@ -8,13 +8,11 @@ macro_rules! Impl {
             fn ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
-                extra: Extra
-            ) -> (&'a [Tag], Self) 
-            where Extra: 'a
-            {
+                with: Extra
+            ) -> (&'a [Tag], Self) {
                 $(
                     // Because tag code is suffix coding, we have to parse from tail to head
-                    let (stack, casey::lower!($B)) = $B::ast(input, stack, extra);
+                    let (stack, casey::lower!($B)) = $B::ast(input, stack, with);
                 )*
                 (stack, ($(casey::lower!($A), )*))
             }

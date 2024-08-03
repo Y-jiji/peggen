@@ -12,8 +12,8 @@ pub struct BRVec<'b, T>(bumpalo::collections::Vec<'b, T>);
 
 impl<'b, T> Prepend<&'b Bump> for BRVec<'b, T> {
     type Item = T;
-    fn empty(extra: &'b Bump) -> Self {
-        Self(bumpalo::collections::Vec::new_in(extra))
+    fn empty(with: &'b Bump) -> Self {
+        Self(bumpalo::collections::Vec::new_in(with))
     }
     fn prepend(&mut self, value: Self::Item, _: &'b Bump) {
         let Self(inner) = self;

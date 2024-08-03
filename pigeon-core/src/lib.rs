@@ -38,9 +38,8 @@ pub trait AstImpl<Extra: Copy> {
     fn ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
-        extra: Extra
-    ) -> (&'a [Tag], Self)
-    where Extra: 'a;
+        with: Extra
+    ) -> (&'a [Tag], Self);
 }
 
 pub trait ParseImpl<const GROUP: usize, const ERROR: bool> {

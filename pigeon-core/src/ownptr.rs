@@ -26,11 +26,9 @@ macro_rules! Impl {
             fn ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
-                extra: Extra
-            ) -> (&'a [Tag], Self) 
-            where Extra: 'a
-            {
-                let (rest, this) = T::ast(input, stack, extra);
+                with: Extra
+            ) -> (&'a [Tag], Self) {
+                let (rest, this) = T::ast(input, stack, with);
                 (rest, $T::new(this))
             }
         }
@@ -57,11 +55,9 @@ impl<'b, T> AstImpl<&'b bumpalo::Bump> for bumpalo::boxed::Box<'b, T>
     fn ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
-        extra: &'b bumpalo::Bump
-    ) -> (&'a [Tag], Self)
-        where &'b bumpalo::Bump: 'a 
-    {
-        let (rest, this) = T::ast(input, stack, extra);
-        (rest, bumpalo::boxed::Box::new_in(this, extra))
+        with: &'b bumpalo::Bump
+    ) -> (&'a [Tag], Self) {
+        let (rest, this) = T::ast(input, stack, with);
+        (rest, bumpalo::boxed::Box::new_in(this, with))
     }
 }
