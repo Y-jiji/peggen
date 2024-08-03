@@ -2,14 +2,16 @@ use crate::*;
 
 macro_rules! Impl {
     ($($($A: ident)*, $($B: ident)*;)*) => {$(
-        impl<Extra, $($A, )*> AstImpl<Extra> for ($($A, )*)
+        impl<Extra: Copy, $($A, )*> AstImpl<Extra> for ($($A, )*)
             where $($A: AstImpl<Extra>, )*
         {
             fn ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
-                extra: &'a Extra
-            ) -> (&'a [Tag], Self) {
+                extra: Extra
+            ) -> (&'a [Tag], Self) 
+            where Extra: 'a
+            {
                 $(
                     // Because tag code is suffix coding, we have to parse from tail to head
                     let (stack, casey::lower!($B)) = $B::ast(input, stack, extra);

@@ -1,5 +1,5 @@
-pub trait Prepend<Extra> {
+pub trait Prepend<Extra: Copy> {
     type Item;
-    fn empty() -> Self;
-    fn prepend(&mut self, value: Self::Item, extra: &Extra);
+    fn empty(extra: Extra) -> Self;
+    fn prepend(&mut self, value: Self::Item, extra: Extra);
 }

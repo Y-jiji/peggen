@@ -18,13 +18,16 @@ macro_rules! Impl {
         }
 
         impl<Extra, T> AstImpl<Extra> for $T<T> 
-            where T: AstImpl<Extra>
+            where T: AstImpl<Extra>,
+                  Extra: Copy,
         {
             fn ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
-                extra: &'a Extra
-            ) -> (&'a [Tag], Self) {
+                extra: Extra
+            ) -> (&'a [Tag], Self) 
+            where Extra: 'a
+            {
                 let (rest, this) = T::ast(input, stack, extra);
                 (rest, $T::new(this))
             }

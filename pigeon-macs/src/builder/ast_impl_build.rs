@@ -81,8 +81,14 @@ impl AstImplBuild for Builder {
         // Prepare several tokens to be used later
         let this = &self.ident;
         let generics = &self.generics;
-        Ok(quote!{impl<#generics Extra> #_crate::AstImpl<Extra> for #this<#generics> {
-            fn ast<'a>(input: &'a str, stack: &'a [#_crate::Tag], extra: &'a Extra) -> (&'a [#_crate::Tag], Self) {
+        Ok(quote!{impl<#generics Extra: Copy> #_crate::AstImpl<Extra> for #this<#generics> {
+            fn ast<'a>(
+                input: &'a str, 
+                stack: &'a [#_crate::Tag], 
+                extra: Extra
+            ) -> (&'a [#_crate::Tag], Self)
+                where Extra: 'a
+            {
                 // Get the tag number
                 let tag = stack[stack.len()-1].rule - <Self as #_crate::Num>::num(0);
                 // Remove the last element from stack, this will be processed by arms

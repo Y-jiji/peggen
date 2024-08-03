@@ -2,12 +2,14 @@ use alloc::string::String;
 
 use crate::*;
 
-impl<Extra> AstImpl<Extra> for String {
+impl<Extra: Copy> AstImpl<Extra> for String {
     fn ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
-        _: &'a Extra
-    ) -> (&'a [Tag], Self) {
+        _: Extra
+    ) -> (&'a [Tag], Self) 
+    where Extra: 'a
+    {
         let tag = &stack[stack.len()-1];
         (
             &stack[..stack.len()-1],

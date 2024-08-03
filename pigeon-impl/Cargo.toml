@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bumpalo = { version = "3.16.0", features = ["boxed", "collections"] }
+pigeon-core = { version = "0.2.0", path = "../pigeon-core" }
+pigeon-macs = { version = "0.2.0", path = "../pigeon-macs" }

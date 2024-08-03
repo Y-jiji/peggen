@@ -46,18 +46,20 @@ pub fn prepend_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let generics = input.generics.params;
     let ident = input.ident;
     quote! {
-        impl<#generics, Extra> AstImpl<Extra> for #ident<#generics> where
+        impl<#generics, Extra: Copy> AstImpl<Extra> for #ident<#generics> where
             Self: Prepend<Extra>,
             <Self as Prepend<Extra>>::Item: AstImpl<Extra>
         {
             fn ast<'a>(
                 input: &'a str, 
                 stack: &'a [#_crate::Tag], 
-                extra: &'a Extra
-            ) -> (&'a [#_crate::Tag], Self) {
+                extra: Extra
+            ) -> (&'a [#_crate::Tag], Self) 
+                where Extra: 'a
+            {
                 let tag = &stack[stack.len()-1];
                 let mut stack = &stack[..stack.len()-1];
-                let mut this = <Self as Prepend<Extra>>::empty();
+                let mut this = <Self as Prepend<Extra>>::empty(extra);
                 for i in 0..tag.rule {
                     let (stack_, value) = <<Self as Prepend<Extra>>::Item as AstImpl<Extra>>::ast(input, stack, extra);
                     this.prepend(value, extra);

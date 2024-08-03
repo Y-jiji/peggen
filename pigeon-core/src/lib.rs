@@ -34,12 +34,13 @@ pub struct Tag {
     pub rule: usize,
 }
 
-pub trait AstImpl<Extra> {
+pub trait AstImpl<Extra: Copy> {
     fn ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
-        extra: &'a Extra
-    ) -> (&'a [Tag], Self);
+        extra: Extra
+    ) -> (&'a [Tag], Self)
+    where Extra: 'a;
 }
 
 pub trait ParseImpl<const GROUP: usize, const ERROR: bool> {

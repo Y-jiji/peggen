@@ -18,6 +18,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
+name = "bumpalo"
+version = "3.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
+
+[[package]]
 name = "bytemuck"
 version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -124,6 +130,7 @@ name = "pigeon"
 version = "0.2.0"
 dependencies = [
  "pigeon-core",
+ "pigeon-impl",
  "pigeon-macs",
 ]
 
@@ -144,6 +151,11 @@ dependencies = [
 [[package]]
 name = "pigeon-impl"
 version = "0.1.0"
+dependencies = [
+ "bumpalo",
+ "pigeon-core",
+ "pigeon-macs",
+]
 
 [[package]]
 name = "pigeon-macs"

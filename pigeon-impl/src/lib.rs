@@ -1,14 +1,8 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+#![no_std]
+extern crate alloc;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod rvec;
+pub use rvec::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod bump;
+pub use bump::*;
