@@ -45,6 +45,7 @@ impl ParserImplBuild for Builder {
                                 if symb != <Self as #_crate::Num>::num(#group) { continue }
                                 Err(())?
                             }
+                            // Try each rule repeatedly until 
                             trace.push((end, <Self as #_crate::Num>::num(#group)));
                             loop { #body; break }
                             trace.pop();

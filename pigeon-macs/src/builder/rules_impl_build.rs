@@ -25,7 +25,7 @@ impl RulesImplBuild for Builder {
                 quote! {
                     let end = {
                         let begin = end;
-                        static REGEX: #_crate::Lazy<#_crate::Regex> = #_crate::Lazy::new(|| #_crate::Regex::new(#regex).unwrap());
+                        static REGEX: #_crate::LazyLock<#_crate::Regex> = #_crate::LazyLock::new(|| #_crate::Regex::new(#regex).unwrap());
                         let Some(mat) = REGEX.find(&input[begin..]) else {
                             Err(())?
                         };
@@ -36,7 +36,7 @@ impl RulesImplBuild for Builder {
                     };
                 }
             },
-            Fmt::PushGroup { children, .. } => {
+            Fmt::SeqExp { children, .. } => {
                 let mut body = TokenStream::new();
                 for (child, flag) in children {
                     let child = child.iter()
@@ -47,7 +47,7 @@ impl RulesImplBuild for Builder {
                             let end = { #child; end }; 
                         },
                         Flag::Repeat => quote! {
-                            let end = {    
+                            let end = {
                                 let mut end = end;
                                 loop {
                                     // Use a closure to wrap `Err(...)?` to prevent exiting outer function. 
@@ -90,15 +90,28 @@ impl RulesImplBuild for Builder {
         })
     }
     fn rules_impl_build(&self) -> Result<TokenStream> {
+        // The merged output stream
         let mut output = TokenStream::new();
+        // For each rule, build a Rule<N> trait
         for rule in 0..self.rules.len() {
+            // Add every hole in every rule
             let mut body = TokenStream::new();
-            let _crate = parse_str::<Ident>(CRATE).unwrap();
             for fmt in &self.rules[rule].exprs {
                 body.extend(self.rules_body_build(fmt)?);
             }
+            // Add prepare identities
+            let _crate = parse_str::<Ident>(CRATE).unwrap();
             let this = &self.ident;
             let generics = &self.generics.params;
+            let variant = &self.rules[rule].ident;
+            // Add trace if trace presents
+            let trace_prolog = if self.rules[rule].trace { quote! {
+                println!("phase 1 prologue {}::{}", stringify!(#this), stringify!(#variant));
+            } } else { quote! {} };
+            let trace_epilog = if self.rules[rule].trace { quote! {
+                println!("phase 1 epilogue {}::{}", stringify!(#this), stringify!(#variant));
+            } } else { quote! {} };
+            // Build Rule<N, ERROR>
             output.extend(quote! {
                 impl<#generics const ERROR: bool> #_crate::RuleImpl<#rule, ERROR> for #this<#generics> 
                     where Self: #_crate::Space,
@@ -109,6 +122,7 @@ impl RulesImplBuild for Builder {
                         trace: &mut Vec<(usize, usize)>,
                         stack: &mut Vec<#_crate::Tag>,
                     ) -> Result<usize, ()> {
+                        #trace_prolog
                         let size = stack.len();
                         let rule = <Self as #_crate::Num>::num(#rule);
                         let begin = end;
@@ -119,9 +133,11 @@ impl RulesImplBuild for Builder {
                         };
                         match inner() {
                             Ok(end) if end > last => {
+                                #trace_epilog
                                 Ok(end)
                             },
                             Err(()) | Ok(..) => {
+                                #trace_epilog
                                 stack.resize_with(size, || unreachable!()); 
                                 Err(())
                             }
@@ -130,6 +146,7 @@ impl RulesImplBuild for Builder {
                 }
             })
         }
+        // The final output
         Ok(output)
     }
 }

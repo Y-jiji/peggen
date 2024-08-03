@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, ParseImpl, AstImpl, Num, Space)]
+#[derive(Debug, ParseImpl, EnumAstImpl, Num, Space)]
 pub enum Expr {
     #[rule("{0:0} + {1:1}", group=0)]
     Add(Box<Expr>, Box<Expr>),

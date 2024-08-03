@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use pigeon::{AstImpl, Num, ParseImpl, Prepend, Space};
+use pigeon::*;
 
-#[derive(Debug, Num, ParseImpl, AstImpl, Space)]
+#[derive(Debug, Num, ParseImpl, EnumAstImpl, Space)]
 pub enum Json {
     #[rule("{0:`0|-?[1-9][0-9]*`}")]
     Int(i64),
@@ -15,7 +15,7 @@ pub enum Json {
 }
 
 // TODO: put this into pigeon-impl
-#[derive(Prepend)]
+#[derive(PrependAstImpl)]
 pub struct RVec<T>(Vec<T>);
 
 impl<T, Extra> Prepend<Extra> for RVec<T> {

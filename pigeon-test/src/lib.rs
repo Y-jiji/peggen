@@ -1,5 +1,5 @@
 #![allow(unused)]
-use pigeon::{AstImpl, Num, ParseImpl, Prepend, Space};
+use pigeon::{EnumAstImpl, PrependAstImpl, AstImpl, Num, ParseImpl, Prepend, Space};
 
 mod json;
 mod calc;

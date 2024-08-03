@@ -16,13 +16,16 @@ mod map;
 mod tuple;
 mod string;
 
-pub use prepend::*;
+// re-exports
+pub use crate::prepend::*;
+pub use crate::parser::Parser;
+
 // re-exports
 use core::sync::atomic::AtomicUsize;
 pub use regex::Regex;
-pub use once_cell::sync::Lazy;
+pub use once_cell::unsync::Lazy as LazyCell;
+pub use once_cell::sync::Lazy as LazyLock;
 pub use alloc::vec::Vec;
-pub use crate::parser::Parser;
 pub use stacker as stacker;
 
 #[derive(Debug)]
@@ -55,7 +58,7 @@ pub trait RuleImpl<const RULE: usize, const ERROR: bool> {
     ) -> Result<usize, ()>;
 }
 
-pub static COUNT: AtomicUsize = AtomicUsize::new(0);
+pub static PIGEON_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub trait Num {
     fn num(rule: usize) -> usize;

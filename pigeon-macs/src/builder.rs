@@ -1,4 +1,4 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use quote::ToTokens;
 use regex::Regex;
 
@@ -16,6 +16,7 @@ pub use parse_impl_build::*;
 pub(crate) struct Rule {
     group: usize,
     named: bool,
+    trace: bool,
     error: bool,
     exprs: Vec<Fmt>,
     ident: Ident,
@@ -26,7 +27,8 @@ impl Rule {
         let mut rule = Rule {
             group: 0,
             named: matches!(fields, Fields::Named(..)),
-            error: attr.path().require_ident()?.to_string() == "error",
+            error: false,
+            trace: false,
             exprs: vec![],
             ident: ident.clone(),
         };
@@ -58,7 +60,7 @@ impl Rule {
                 }};
             }
             if let TokenTree::Literal(lit) = token {
-                static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^r#*\"").unwrap());
+                static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new("^r#*\"").unwrap());
                 let s = lit.to_string();
                 let s = if let Some(i) = REGEX.find(&s) {
                     &s[i.len()..s.len()-i.len()+1]
@@ -87,6 +89,9 @@ impl Rule {
                     "error" => {
                         rule.error = true;
                     },
+                    "trace" => {
+                        rule.trace = true;
+                    }
                     _ => {
                         Err(Error::new_spanned(ident, "bad identity, expect group"))?
                     }
@@ -97,10 +102,11 @@ impl Rule {
     }
 }
 
+/// A builder type for building parser
 pub(crate) struct Builder {
     /// All the rules. 
     rules: Vec<Rule>,
-    /// Largest group number.
+    /// Largest group number
     group: usize,
     /// If this type is enum
     is_enum: bool,
