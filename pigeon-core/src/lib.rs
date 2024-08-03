@@ -18,7 +18,7 @@ mod string;
 
 // re-exports
 pub use crate::prepend::*;
-pub use crate::parser::Parser;
+pub use crate::parser::*;
 
 // re-exports
 use core::sync::atomic::AtomicUsize;

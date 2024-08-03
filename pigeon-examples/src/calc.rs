@@ -1,21 +1,21 @@
 use crate::*;
-use bumpalo::boxed::Box;
+use bumpalo::boxed::Box as BBox;
 
 #[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
 #[with(&'a bumpalo::Bump)]
 pub enum Expr<'a> {
     #[rule("{0:0} + {1:1}", group=0)]
-    Add(Box<'a, Expr<'a>>, Box<'a, Expr<'a>>),
+    Add(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
     #[rule("{0:0} - {1:1}", group=0)]
-    Sub(Box<'a, Expr<'a>>, Box<'a, Expr<'a>>),
+    Sub(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
     #[rule("{0:1} * {1:2}", group=1)]
-    Mul(Box<'a, Expr<'a>>, Box<'a, Expr<'a>>),
+    Mul(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
     #[rule("{0:1} / {1:2}", group=1)]
-    Div(Box<'a, Expr<'a>>, Box<'a, Expr<'a>>),
+    Div(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
     #[rule("{0:`[a-z0-9]`}", group=2)]
     Ident(String),
     #[rule(r"( {0} )", group=2)]
-    Scope(Box<'a, Expr<'a>>),
+    Scope(BBox<'a, Expr<'a>>),
 }
 
 #[cfg(test)]
