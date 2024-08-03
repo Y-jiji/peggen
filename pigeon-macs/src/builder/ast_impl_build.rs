@@ -59,8 +59,7 @@ impl AstImplBuild for Builder {
                                 let tag = &stack[stack.len()-1];
                                 (
                                     &stack[..stack.len()-1],
-                                    <#typ as core::str::FromStr>::from_str(&input[tag.span.clone()])
-                                        .unwrap()
+                                    <#typ as #_crate::FromStr<#with>>::from_str_with(&input[tag.span.clone()], with)
                                 )
                             };
                         });

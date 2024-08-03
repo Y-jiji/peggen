@@ -15,10 +15,12 @@ mod prepend;
 mod ownptr;
 mod tuple;
 mod string;
+mod fromstr;
 
 // re-exports
 pub use crate::prepend::*;
 pub use crate::parser::*;
+pub use crate::fromstr::*;
 
 // re-exports
 use core::sync::atomic::AtomicUsize;

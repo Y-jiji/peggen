@@ -1,5 +1,6 @@
 use crate::*;
 use bumpalo::boxed::Box as BBox;
+use bumpalo::collections::String as BString;
 
 #[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
 #[with(&'a bumpalo::Bump)]
@@ -13,7 +14,7 @@ pub enum Expr<'a> {
     #[rule("{0:1} / {1:2}", group=1)]
     Div(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
     #[rule("{0:`[a-z0-9]`}", group=2)]
-    Ident(String),
+    Ident(BString<'a>),
     #[rule(r"( {0} )", group=2)]
     Scope(BBox<'a, Expr<'a>>),
 }
