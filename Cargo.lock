@@ -138,6 +138,7 @@ dependencies = [
 name = "pigeon-core"
 version = "0.2.0"
 dependencies = [
+ "bumpalo",
  "bytemuck",
  "casey",
  "once_cell",
