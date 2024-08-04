@@ -1,5 +1,5 @@
 [package]
-name = "pigeon-core"
+name = "peggen-core"
 description = "Generate recursive-descent & precedence climbing parsers. (traits)"
 version = "0.2.0"
 edition = "2021"
@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 keywords = ["parser-tools", "parser", "compiler"]
 # category = "compilers"
 workspace = ".."
-repository = "https://github.com/Y-jiji/pigeon"
+repository = "https://github.com/Y-jiji/peggen"
 
 [dependencies]
 bumpalo = { version = "3.16.0", features = ["boxed", "collections"] }

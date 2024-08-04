@@ -1,5 +1,5 @@
 [package]
-name = "pigeon-impl"
+name = "peggen-impl"
 version = "0.2.0"
 edition = "2021"
 description = "Generate recursive-descent & precedence climbing parsers. (extra implementations)"
@@ -7,10 +7,10 @@ license = "MIT OR Apache-2.0"
 keywords = ["parser-tools", "parser", "compiler"]
 # category = "compilers"
 workspace = ".."
-repository = "https://github.com/Y-jiji/pigeon"
+repository = "https://github.com/Y-jiji/peggen"
 readme = "../README.md"
 
 [dependencies]
 bumpalo = { version = "3.16.0", features = ["boxed", "collections"] }
-pigeon-core = { version = "0.2.0", path = "../pigeon-core" }
-pigeon-macs = { version = "0.2.0", path = "../pigeon-macs" }
+peggen-core = { version = "0.2.0", path = "../peggen-core" }
+peggen-macs = { version = "0.2.0", path = "../peggen-macs" }

@@ -23,7 +23,7 @@ pub enum Expr<'a> {
 mod test {
     use super::*;
     use bumpalo::Bump;
-    use pigeon::Parser;
+    use peggen::Parser;
 
     #[test]
     fn expr() {

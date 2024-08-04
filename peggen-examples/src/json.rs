@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use pigeon::*;
+use peggen::*;
 
 #[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
 pub enum Json {
@@ -15,7 +15,7 @@ pub enum Json {
 
 #[cfg(test)]
 mod test {
-    use pigeon::*;
+    use peggen::*;
     use super::*;
 
     #[test]

@@ -126,16 +126,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "pigeon"
+name = "peggen"
 version = "0.2.0"
 dependencies = [
- "pigeon-core",
- "pigeon-impl",
- "pigeon-macs",
+ "peggen-core",
+ "peggen-impl",
+ "peggen-macs",
 ]
 
 [[package]]
-name = "pigeon-core"
+name = "peggen-core"
 version = "0.2.0"
 dependencies = [
  "bumpalo",
@@ -150,26 +150,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "pigeon-examples"
+name = "peggen-examples"
 version = "0.2.0"
 dependencies = [
  "bumpalo",
  "once_cell",
- "pigeon",
+ "peggen",
  "stacker",
 ]
 
 [[package]]
-name = "pigeon-impl"
+name = "peggen-impl"
 version = "0.2.0"
 dependencies = [
  "bumpalo",
- "pigeon-core",
- "pigeon-macs",
+ "peggen-core",
+ "peggen-macs",
 ]
 
 [[package]]
-name = "pigeon-macs"
+name = "peggen-macs"
 version = "0.2.0"
 dependencies = [
  "once_cell",

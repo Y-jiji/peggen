@@ -1,11 +1,11 @@
-mod pigeon {
-    pub(crate) use pigeon_core::*;
-    pub(crate) use pigeon_macs::*;    
+mod peggen {
+    pub(crate) use peggen_core::*;
+    pub(crate) use peggen_macs::*;    
 }
 
 use core::fmt::Debug;
 use alloc::vec::Vec;
-use pigeon::*;
+use peggen::*;
 
 /// Reversed vector
 #[derive(PrependAstImpl)]

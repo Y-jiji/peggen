@@ -15,7 +15,7 @@ macro_rules! bail {
     }};
 }
 
-pub(crate) const CRATE: &str = "pigeon";
+pub(crate) const CRATE: &str = "peggen";
 
 /// Generate Parse<GROUP> trait(s) from rule attributes
 #[proc_macro_derive(ParseImpl, attributes(rule))]

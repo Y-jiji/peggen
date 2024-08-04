@@ -1,4 +1,4 @@
-//! # [`pigeon-core`]
+//! # [`peggen-core`]
 //! 
 //! ## Two-phase Parsing w/o Memorization
 //! In most PEG-based approaches, the target type is constructed during parsing. 

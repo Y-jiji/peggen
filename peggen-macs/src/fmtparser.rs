@@ -70,7 +70,7 @@ pub(crate) enum Flag {
     Repeat,
 }
 
-/// A parser that parses pigeon fmt string. 
+/// A parser that parses peggen fmt string. 
 pub struct FmtParser {
     /// A map from name to types
     pub map: HashMap<String, Type>,
