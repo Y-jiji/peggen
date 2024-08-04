@@ -16,11 +16,13 @@ mod ownptr;
 mod tuple;
 mod string;
 mod fromstr;
+mod span;
 
 // re-exports
 pub use crate::prepend::*;
 pub use crate::parser::*;
 pub use crate::fromstr::*;
+pub use crate::span::*;
 
 // re-exports
 use core::sync::atomic::AtomicUsize;
