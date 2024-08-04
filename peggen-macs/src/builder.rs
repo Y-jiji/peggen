@@ -155,6 +155,9 @@ impl Builder {
                     .filter(|var| var.attrs.iter().filter(|x| x.path().is_ident("rule")).next().is_some());
                 for variant in variants {
                     for attr in variant.attrs {
+                        if attr.path().to_token_stream().to_string() != "rule" {
+                            continue;
+                        }
                         this.add_rule(Rule::new(
                             variant.fields.clone(), 
                             variant.ident.clone(), 
