@@ -85,10 +85,10 @@ impl Rule {
                         expect!("=");
                         let g = get!(usize);
                         rule.group = g;
-                    },
+                    }
                     "error" => {
                         rule.error = true;
-                    },
+                    }
                     "trace" => {
                         rule.trace = true;
                     }

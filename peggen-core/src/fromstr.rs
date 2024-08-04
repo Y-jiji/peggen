@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 pub trait FromStr<Extra> {
     fn from_str_with(source: &str, extra: Extra) -> Self;
 }
@@ -22,5 +24,5 @@ Impl!(
     i8 i16 i32 i64 i128
     u8 u16 u32 u64 u128
     f32 f64
-    bool
+    bool String
 );
