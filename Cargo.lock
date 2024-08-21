@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "peggen-impl"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bumpalo",
  "peggen-core",
@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "peggen-macs"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "once_cell",
  "proc-macro2",

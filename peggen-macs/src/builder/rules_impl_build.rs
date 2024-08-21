@@ -46,7 +46,7 @@ impl RulesImplBuild for Builder {
                         .try_fold(TokenStream::new(), |mut a, b| { a.extend(b?); Result::Ok(a) })?;
                     body.extend(match flag {
                         Flag::Null => quote! {
-                            let end = { #child; end }; 
+                            let end = { #child; count += 1; end };
                         },
                         Flag::Repeat => quote! {
                             let end = {
