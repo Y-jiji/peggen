@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use peggen::*;
 
 /// Reversed vector
-#[derive(PrependAstImpl, Clone)]
+#[derive(PrependAstImpl, Clone, PartialEq, Eq)]
 pub struct RVec<T>(Vec<T>);
 
 impl<T, Extra: Copy> Prepend<Extra> for RVec<T> {
