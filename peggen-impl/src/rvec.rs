@@ -36,3 +36,10 @@ impl<T> IntoIterator for RVec<T> {
         inner.into_iter().rev()
     }
 }
+
+impl<T> core::ops::Index<usize> for RVec<T> {
+    type Output = T;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[self.0.len()-1-index]
+    }
+}
