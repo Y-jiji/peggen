@@ -1,6 +1,6 @@
 [package]
 name = "peggen-impl"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Generate recursive-descent & precedence climbing parsers. (extra implementations)"
 license = "MIT OR Apache-2.0"
@@ -12,5 +12,5 @@ readme = "../README.md"
 
 [dependencies]
 bumpalo = { version = "3.16.0", features = ["boxed", "collections"] }
-peggen-core = { version = "0.2.0", path = "../peggen-core" }
-peggen-macs = { version = "0.2.0", path = "../peggen-macs" }
+peggen-core = { version = "0.2", path = "../peggen-core" }
+peggen-macs = { version = "0.2", path = "../peggen-macs" }

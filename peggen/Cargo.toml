@@ -1,7 +1,7 @@
 [package]
 name = "peggen"
 description = "Generate recursive-descent & precedence climbing parsers. "
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 keywords = ["parser-tools", "parser", "compiler"]
@@ -11,9 +11,9 @@ repository = "https://github.com/Y-jiji/peggen"
 readme = "../README.md"
 
 [dependencies]
-peggen-core = { version = "0.2.0", path = "../peggen-core" }
-peggen-impl = { version = "0.2.0", path = "../peggen-impl" }
-peggen-macs = { version = "0.2.0", path = "../peggen-macs" }
+peggen-core = { version = "0.2", path = "../peggen-core" }
+peggen-impl = { version = "0.2", path = "../peggen-impl" }
+peggen-macs = { version = "0.2", path = "../peggen-macs" }
 
 [features]
 trace = ["std"]
