@@ -63,7 +63,7 @@ impl std::fmt::Debug for Fmt {
 #[derive(Debug)]
 pub(crate) enum Flag {
     /// Nothing special
-    Null,
+    Just,
     /// The pattern can be omitted
     OrNot,
     /// The pattern can be repeated
@@ -229,7 +229,7 @@ impl FmtParser {
     fn seqexp_item<'a>(&self, input: &'a str, end: usize) -> Result<(usize, String, Type, Vec<Fmt>, Flag), FmtError<'a>> {
         // TODO: better error message
         // Determine the flag of the push group
-        let mut flag = Flag::Null;
+        let mut flag = Flag::Just;
         let end = if let Ok(end) = Self::eat("[*", input, end) {
             flag = Flag::Repeat;
             end

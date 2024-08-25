@@ -45,7 +45,7 @@ impl RulesImplBuild for Builder {
                         .map(|fmt| self.rules_body_build(fmt))
                         .try_fold(TokenStream::new(), |mut a, b| { a.extend(b?); Result::Ok(a) })?;
                     body.extend(match flag {
-                        Flag::Null => quote! {
+                        Flag::Just => quote! {
                             let end = { #child; count += 1; end };
                         },
                         Flag::Repeat => quote! {
@@ -59,7 +59,7 @@ impl RulesImplBuild for Builder {
                                         count += 1;
                                     } else {
                                         stack.resize_with(size, || unreachable!());
-                                        break end 
+                                        break end
                                     }
                                 }
                             };
@@ -111,11 +111,8 @@ impl RulesImplBuild for Builder {
                 else                              { quote! { #generics  } };
             let variant = &self.rules[rule].ident;
             // Add trace if trace presents
-            let trace_prolog = if self.rules[rule].trace { quote! {
-                println!("phase 1 prologue {}::{}", stringify!(#this), stringify!(#variant));
-            } } else { quote! {} };
-            let trace_epilog = if self.rules[rule].trace { quote! {
-                println!("phase 1 epilogue {}::{}", stringify!(#this), stringify!(#variant));
+            let print_stack = if self.rules[rule].trace { quote! {
+                println!("{stack:?}");
             } } else { quote! {} };
             // Build Rule<N, ERROR>
             output.extend(quote! {
@@ -128,7 +125,6 @@ impl RulesImplBuild for Builder {
                         trace: &mut Vec<(usize, usize)>,
                         stack: &mut Vec<#_crate::Tag>,
                     ) -> Result<usize, ()> {
-                        #trace_prolog
                         let size = stack.len();
                         let rule = <Self as #_crate::Num>::num(#rule);
                         let begin = end;
@@ -139,12 +135,12 @@ impl RulesImplBuild for Builder {
                         };
                         match inner() {
                             Ok(end) if end > last => {
-                                #trace_epilog
+                                #print_stack
                                 Ok(end)
                             },
                             Err(()) | Ok(..) => {
-                                #trace_epilog
-                                stack.resize_with(size, || unreachable!()); 
+                                #print_stack
+                                stack.resize_with(size, || unreachable!());
                                 Err(())
                             }
                         }
