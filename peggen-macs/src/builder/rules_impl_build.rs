@@ -4,11 +4,11 @@ use crate::*;
 
 pub trait RulesImplBuild {
     fn rules_impl_build(&self) -> Result<TokenStream>;
-    fn rules_body_build(&self, fmt: &Fmt) -> Result<TokenStream>;
+    fn rules_item_build(&self, fmt: &Fmt) -> Result<TokenStream>;
 }
 
 impl RulesImplBuild for Builder {
-    fn rules_body_build(&self, fmt: &Fmt) -> Result<TokenStream> {
+    fn rules_item_build(&self, fmt: &Fmt) -> Result<TokenStream> {
         let _crate = parse_str::<Ident>(CRATE).unwrap();
         Ok(match fmt {
             Fmt::Space => quote! {
@@ -42,11 +42,19 @@ impl RulesImplBuild for Builder {
                 let mut body = TokenStream::new();
                 for (child, flag) in children {
                     let child = child.iter()
-                        .map(|fmt| self.rules_body_build(fmt))
+                        .map(|fmt| self.rules_item_build(fmt))
                         .try_fold(TokenStream::new(), |mut a, b| { a.extend(b?); Result::Ok(a) })?;
                     body.extend(match flag {
                         Flag::Just => quote! {
-                            let end = { #child; count += 1; end };
+                            let end = {
+                                let size = stack.len();
+                                if let Ok(end_) = (|| -> Result<usize, ()> { #child; Ok(end) })() {
+                                    count += 1; end_
+                                } else {
+                                    stack.resize_with(size, || unreachable!());
+                                    return Err(());
+                                }
+                            };
                         },
                         Flag::Repeat => quote! {
                             let end = {
@@ -99,7 +107,7 @@ impl RulesImplBuild for Builder {
             // Add every hole in every rule
             let mut body = TokenStream::new();
             for fmt in &self.rules[rule].exprs {
-                body.extend(self.rules_body_build(fmt)?);
+                body.extend(self.rules_item_build(fmt)?);
             }
             // Add prepare identities
             let _crate = parse_str::<Ident>(CRATE).unwrap();
@@ -109,12 +117,6 @@ impl RulesImplBuild for Builder {
             let generics = 
                 if !comma && !generics.is_empty() { quote! { #generics, } }
                 else                              { quote! { #generics  } };
-            let variant = &self.rules[rule].ident;
-            // Add trace if trace presents
-            let print_stack = if self.rules[rule].trace { quote! {
-                println!("{}::{}", stringify!(#this), stringify!(#variant));
-                println!("{stack:?}");
-            } } else { quote! {} };
             // Build Rule<N, ERROR>
             output.extend(quote! {
                 impl<#generics const ERROR: bool> #_crate::RuleImpl<#rule, ERROR> for #this<#generics> 
@@ -136,11 +138,9 @@ impl RulesImplBuild for Builder {
                         };
                         match inner() {
                             Ok(end) if end > last => {
-                                #print_stack
                                 Ok(end)
                             },
                             Err(()) | Ok(..) => {
-                                #print_stack
                                 stack.resize_with(size, || unreachable!());
                                 Err(())
                             }

@@ -34,6 +34,7 @@ impl ParserImplBuild for Builder {
             };
             body.extend(quote! { #opt });
         }
+        let num_rules = self.rules.len();
         let this = &self.ident;
         let generics = &self.generics.params;
         let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
@@ -49,15 +50,20 @@ impl ParserImplBuild for Builder {
                 ) -> Result<usize, ()> {
                     #_crate::stacker::maybe_grow(32*1024, 1024*1024, || {
                         let mut last = end;
-                        if stack.last().map(|top| top.span.start == end).unwrap_or(false) {
+                        if stack.last().map(|top| 
+                            top.span.start == end && 
+                            top.rule < <Self as #_crate::Num>::num(#num_rules) && 
+                            top.rule >= <Self as #_crate::Num>::num(0)
+                        ).unwrap_or(false) {
                             return Ok(stack.last().unwrap().span.end);
                         }
+                        // if find a symbol at current position on the path, incur recursion error
                         for &(begin, symb) in trace.iter().rev() {
                             if begin < end { break }
                             if symb != <Self as #_crate::Num>::num(#group) { continue }
                             Err(())?
                         }
-                        // Try each rule repeatedly until
+                        // Try each rule repeatedly until nothing new occurs
                         trace.push((end, <Self as #_crate::Num>::num(#group)));
                         loop { #body; break }
                         trace.pop();

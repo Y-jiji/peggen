@@ -62,7 +62,7 @@ pub trait RuleImpl<const RULE: usize, const ERROR: bool> {
     ) -> Result<usize, ()>;
 }
 
-pub static PIGEON_COUNT: AtomicUsize = AtomicUsize::new(0);
+pub static PIGEON_COUNT: AtomicUsize = AtomicUsize::new(1);
 
 pub trait Num {
     fn num(rule: usize) -> usize;
