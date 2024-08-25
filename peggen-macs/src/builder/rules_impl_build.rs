@@ -112,6 +112,7 @@ impl RulesImplBuild for Builder {
             let variant = &self.rules[rule].ident;
             // Add trace if trace presents
             let print_stack = if self.rules[rule].trace { quote! {
+                println!("{}::{}", stringify!(#this), stringify!(#variant));
                 println!("{stack:?}");
             } } else { quote! {} };
             // Build Rule<N, ERROR>
