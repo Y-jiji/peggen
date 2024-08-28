@@ -62,6 +62,7 @@ impl ParserImplBuild for Builder {
                         // This should happen on each rule, not each symbol
                         trace.push((end, <Self as #_crate::Num>::num(#group), false));
                         let ok = loop {
+                            println!("LOOP\t{}", stringify!(#this));
                             trace.last_mut().map(|(_, _, leftrec)| *leftrec = false);
                             #body;
                             break false
