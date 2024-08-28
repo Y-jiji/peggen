@@ -24,7 +24,7 @@ impl RulesImplBuild for Builder {
             },
             Fmt::RegExp { regex, refute, .. } => {
                 let regex = format!("^({regex})");
-                let refex = refute.as_ref().map(|r| format!("^({r})")).unwrap_or(String::new());
+                let refex = refute.as_ref().map(|r| format!("^({r})$")).unwrap_or(String::new());
                 let refute = refute.is_some();
                 quote! {
                     let end = {
