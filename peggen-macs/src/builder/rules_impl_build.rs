@@ -132,7 +132,7 @@ impl RulesImplBuild for Builder {
                     #[inline]
                     fn rule_impl(
                         input: &str, end: usize, 
-                        trace: &mut Vec<(usize, usize)>,
+                        trace: &mut Vec<(usize, usize, bool)>,
                         stack: &mut Vec<#_crate::Tag>,
                     ) -> Result<usize, ()> {
                         // println!("REST\t{}", &input[end..]);

@@ -12,7 +12,7 @@ macro_rules! Impl {
         {
             fn parse_impl(
                 input: &str, end: usize,
-                trace: &mut Vec<(usize, usize)>,
+                trace: &mut Vec<(usize, usize, bool)>,
                 stack: &mut Vec<Tag>,
             ) -> Result<usize, ()> {
                 <T as ParseImpl<GROUP, ERROR>>::parse_impl(input, end, trace, stack)
@@ -42,7 +42,7 @@ impl<'a, const GROUP: usize, const ERROR: bool, T> ParseImpl<GROUP, ERROR> for b
 {
     fn parse_impl(
         input: &str, end: usize,
-        trace: &mut Vec<(usize, usize)>,
+        trace: &mut Vec<(usize, usize, bool)>,
         stack: &mut Vec<Tag>,
     ) -> Result<usize, ()> {
         <T as ParseImpl<GROUP, ERROR>>::parse_impl(input, end, trace, stack)

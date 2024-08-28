@@ -49,7 +49,7 @@ pub trait AstImpl<Extra: Copy> {
 pub trait ParseImpl<const GROUP: usize, const ERROR: bool> {
     fn parse_impl(
         input: &str, end: usize,
-        trace: &mut Vec<(usize, usize)>,
+        trace: &mut Vec<(usize, usize, bool)>,
         stack: &mut Vec<Tag>,
     ) -> Result<usize, ()>;
 }
@@ -57,7 +57,7 @@ pub trait ParseImpl<const GROUP: usize, const ERROR: bool> {
 pub trait RuleImpl<const RULE: usize, const ERROR: bool> {
     fn rule_impl(
         input: &str, end: usize,
-        trace: &mut Vec<(usize, usize)>,
+        trace: &mut Vec<(usize, usize, bool)>,
         stack: &mut Vec<Tag>,
     ) -> Result<usize, ()>;
 }

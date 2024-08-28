@@ -22,14 +22,12 @@ impl ParserImplBuild for Builder {
             if rule.group < group { continue; }
             let opt = quote! {
                 // Each rule either succeeds or don't proceed
-                if let Ok(end) = <Self as #_crate::RuleImpl<#num, ERROR>>::rule_impl(input, end, trace, stack) {
-                    if last == end {
-                        break;
-                    } else {
-                        last = end;
-                        continue;
-                    }
-                };
+                if let Ok(end_) = <Self as #_crate::RuleImpl<#num, ERROR>>::rule_impl(input, begin, trace, stack) {
+                    let leftrec = trace.last().map(|(_, _, leftrec)| *leftrec).unwrap();
+                    end = end_;
+                    if leftrec { continue }
+                    else       { break true }
+                }
             };
             let opt = if rule.error {
                 quote! { if ERROR { #opt } }
@@ -47,25 +45,30 @@ impl ParserImplBuild for Builder {
         Ok(quote! {
             impl<#generics const ERROR: bool> #_crate::ParseImpl<#group, ERROR> for #this<#generics> {
                 fn parse_impl(
-                    input: &str, end: usize,
-                    trace: &mut Vec<(usize, usize)>,
+                    input: &str, mut end: usize,
+                    trace: &mut Vec<(usize, usize, bool)>,
                     stack: &mut Vec<#_crate::Tag>,
                 ) -> Result<usize, ()> {
                     #_crate::stacker::maybe_grow(32*1024, 1024*1024, || {
-                        let mut last = end;
                         // if find a symbol at current position on the path, incur recursion error
-                        for &(begin, symb) in trace.iter().rev() {
-                            if begin < end { break }
-                            if symb != <Self as #_crate::Num>::num(#group) { continue }
+                        for (begin, symb, leftrec) in trace.iter_mut().rev() {
+                            if *begin < end { break }
+                            if *symb != <Self as #_crate::Num>::num(#group) { continue }
+                            *leftrec = true;
                             Err(())?
                         }
+                        let begin = end;
                         // Try each rule repeatedly until nothing new occurs
                         // This should happen on each rule, not each symbol
-                        trace.push((end, <Self as #_crate::Num>::num(#group)));
-                        loop { #body; break }
+                        trace.push((end, <Self as #_crate::Num>::num(#group), false));
+                        let ok = loop {
+                            trace.last_mut().map(|(_, _, leftrec)| *leftrec = false);
+                            #body;
+                            break false
+                        };
                         trace.pop();
-                        if last != end { Ok(last) }
-                        else           { Err(())  }
+                        if ok { Ok(end) }
+                        else  { Err(()) }
                     })
                 }
             }
