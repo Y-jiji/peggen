@@ -118,7 +118,7 @@ impl RulesImplBuild for Builder {
             // Prepare identities
             let _crate = parse_str::<Ident>(CRATE).unwrap();
             let this = &self.ident;
-            let name = &self.rules[rule].ident;
+            let _var = &self.rules[rule].ident;
             let generics = &self.generics.params;
             let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
             let generics = 
@@ -136,7 +136,7 @@ impl RulesImplBuild for Builder {
                         stack: &mut Vec<#_crate::Tag>,
                     ) -> Result<usize, ()> {
                         // println!("REST\t{}", &input[end..]);
-                        // println!("RULE\t{}", stringify!(#name));
+                        // println!("RULE\t{}", stringify!(#_var));
                         let size = stack.len();
                         let rule = <Self as #_crate::Num>::num(#rule);
                         let begin = end;
