@@ -22,9 +22,13 @@ impl ParserImplBuild for Builder {
             if rule.group < group { continue; }
             let opt = quote! {
                 // Each rule either succeeds or don't proceed
-                if let Ok(end) = <Self as #_crate::RuleImpl<#num, ERROR>>::rule_impl(input, end, last, trace, stack) {
-                    last = end;
-                    continue;
+                if let Ok(end) = <Self as #_crate::RuleImpl<#num, ERROR>>::rule_impl(input, end, trace, stack) {
+                    if last == end {
+                        break;
+                    } else {
+                        last = end;
+                        continue;
+                    }
                 };
             };
             let opt = if rule.error {
@@ -34,7 +38,6 @@ impl ParserImplBuild for Builder {
             };
             body.extend(quote! { #opt });
         }
-        let num_rules = self.rules.len();
         let this = &self.ident;
         let generics = &self.generics.params;
         let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
@@ -50,13 +53,6 @@ impl ParserImplBuild for Builder {
                 ) -> Result<usize, ()> {
                     #_crate::stacker::maybe_grow(32*1024, 1024*1024, || {
                         let mut last = end;
-                        if stack.last().map(|top| 
-                            top.span.start == end && 
-                            top.rule < <Self as #_crate::Num>::num(#num_rules) && 
-                            top.rule >= <Self as #_crate::Num>::num(0)
-                        ).unwrap_or(false) {
-                            return Ok(stack.last().unwrap().span.end);
-                        }
                         // if find a symbol at current position on the path, incur recursion error
                         for &(begin, symb) in trace.iter().rev() {
                             if begin < end { break }
@@ -64,6 +60,7 @@ impl ParserImplBuild for Builder {
                             Err(())?
                         }
                         // Try each rule repeatedly until nothing new occurs
+                        // This should happen on each rule, not each symbol
                         trace.push((end, <Self as #_crate::Num>::num(#group)));
                         loop { #body; break }
                         trace.pop();

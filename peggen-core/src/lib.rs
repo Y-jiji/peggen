@@ -56,7 +56,7 @@ pub trait ParseImpl<const GROUP: usize, const ERROR: bool> {
 
 pub trait RuleImpl<const RULE: usize, const ERROR: bool> {
     fn rule_impl(
-        input: &str, end: usize, last: usize,
+        input: &str, end: usize,
         trace: &mut Vec<(usize, usize)>,
         stack: &mut Vec<Tag>,
     ) -> Result<usize, ()>;

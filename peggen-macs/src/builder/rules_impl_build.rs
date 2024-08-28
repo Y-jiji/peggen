@@ -22,8 +22,10 @@ impl RulesImplBuild for Builder {
             Fmt::Symbol { typ, group, .. } => quote! {
                 let end = <#typ as ParseImpl<#group, ERROR>>::parse_impl(input, end, trace, stack)?;
             },
-            Fmt::RegExp { regex, .. } => {
+            Fmt::RegExp { regex, refute, .. } => {
                 let regex = format!("^({regex})");
+                let refex = refute.as_ref().map(|r| format!("^({r})")).unwrap_or(String::new());
+                let refute = refute.is_some();
                 quote! {
                     let end = {
                         let begin = end;
@@ -33,6 +35,10 @@ impl RulesImplBuild for Builder {
                         };
                         let mat = mat.as_str();
                         let end = end + mat.len();
+                        if #refute {
+                            static REGEX: #_crate::LazyLock<#_crate::Regex> = #_crate::LazyLock::new(|| #_crate::Regex::new(#refex).unwrap());
+                            if REGEX.is_match(&input[begin..end]) { Err(())? }
+                        }
                         stack.push(#_crate::Tag { rule: 0, span: begin..end });
                         end
                     };
@@ -109,9 +115,10 @@ impl RulesImplBuild for Builder {
             for fmt in &self.rules[rule].exprs {
                 body.extend(self.rules_item_build(fmt)?);
             }
-            // Add prepare identities
+            // Prepare identities
             let _crate = parse_str::<Ident>(CRATE).unwrap();
             let this = &self.ident;
+            let name = &self.rules[rule].ident;
             let generics = &self.generics.params;
             let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
             let generics = 
@@ -124,26 +131,25 @@ impl RulesImplBuild for Builder {
                 {
                     #[inline]
                     fn rule_impl(
-                        input: &str, end: usize, last: usize,
+                        input: &str, end: usize, 
                         trace: &mut Vec<(usize, usize)>,
                         stack: &mut Vec<#_crate::Tag>,
                     ) -> Result<usize, ()> {
+                        // println!("REST\t{}", &input[end..]);
+                        // println!("RULE\t{}", stringify!(#name));
                         let size = stack.len();
                         let rule = <Self as #_crate::Num>::num(#rule);
                         let begin = end;
-                        let mut inner = || -> Result<usize, ()> {
+                        if stack.last().map(|top| 
+                            top.span.start == end && 
+                            top.rule == rule
+                        ).unwrap_or(false) {
+                            Ok(stack.last().unwrap().span.end)
+                        } else {
                             #body
                             stack.push(#_crate::Tag { rule, span: begin..end });
-                            return Ok(end);
-                        };
-                        match inner() {
-                            Ok(end) if end > last => {
-                                Ok(end)
-                            },
-                            Err(()) | Ok(..) => {
-                                stack.resize_with(size, || unreachable!());
-                                Err(())
-                            }
+                            // println!("TAKE\t{}", &input[begin..end]);
+                            Ok(end)
                         }
                     }
                 }

@@ -19,6 +19,7 @@ pub(crate) enum Fmt {
         arg: String,
         typ: Type,
         regex: String,
+        refute: Option<String>
     },
     /// Consecutive expressions that push to one argument is grouped together. 
     /// 
@@ -45,8 +46,8 @@ impl std::fmt::Debug for Fmt {
         Fmt::Symbol { arg, typ, group } => {
             write!(f, "Symbol {{ arg: {arg:?}, typ: {}, group: {group:?} }}", typ.to_token_stream())
         }
-        Fmt::RegExp { arg, typ, regex } => {
-            write!(f, "Regex {{ arg: {arg:?}, typ: {}, regex: {regex:?} }}", typ.to_token_stream())
+        Fmt::RegExp { arg, typ, regex, refute } => {
+            write!(f, "Regex {{ arg: {arg:?}, typ: {}, regex: {regex:?}, refute: {refute:?} }}", typ.to_token_stream())
         }
         Fmt::SeqExp { arg, typ, children: child} => {
             write!(f, "SeqExp {{ arg: {arg:?}, typ: {}, child: {child:?} }}", typ.to_token_stream())
@@ -292,12 +293,8 @@ impl FmtParser {
             Ok((end, Fmt::Symbol { arg, typ, group: 0 }))
         }
     }
-    /// Parse a regular expression
-    fn regexp<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
-        // Match the number of "#" before "`" and the number of "#" after "`"
-        let end = Self::eat("{", input, end)?;
-        let (end, arg, typ) = self.ident(input, end)?;
-        let end = Self::eat(":", input, end)?;
+    /// Parse a regular expression (string)
+    fn regstr<'a>(&self, input: &'a str, end: usize) -> Result<(usize, String), FmtError<'a>> {
         let (end, cnt) = Self::count("#", input, end);
         let mut end = Self::eat("`", input, end)?;
         let mut range = end..end;
@@ -310,7 +307,7 @@ impl FmtParser {
                 continue;
             }
             let (end_, cnt_) = Self::count("#", input, range.end + 1);
-            if cnt_ < cnt { 
+            if cnt_ < cnt {
                 range.end = range.end + 1;
                 continue;
             }
@@ -320,10 +317,24 @@ impl FmtParser {
             end = end_;
             break;
         }
-        let end = Self::eat("}", input, end)?;
-        Ok((end, Fmt::RegExp {
-            typ, arg, 
-            regex: input[range].to_string() 
+        Ok((end, input[range].to_string()))
+    }
+    /// Parse a regular expression
+    fn regexp<'a>(&self, input: &'a str, end: usize) -> Result<(usize, Fmt), FmtError<'a>> {
+        // Match the number of "#" before "`" and the number of "#" after "`"
+        let end = Self::eat("{", input, end)?;
+        let (end, arg, typ) = self.ident(input, end)?;
+        let end = Self::eat(":", input, end)?;
+        let (end, regex) = self.regstr(input, end)?;
+        if let Ok(end) = Self::eat("}", input, end) {
+            return Ok((end, Fmt::RegExp {
+                typ, arg, regex, refute: None
+            }));
+        }
+        let end = Self::eat("!", input, end)?;
+        let (end, refute) = self.regstr(input, end)?;
+        return Ok((end, Fmt::RegExp {
+            typ, arg, regex, refute: Some(refute)
         }))
     }
 }
