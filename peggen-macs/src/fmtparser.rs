@@ -19,7 +19,7 @@ pub(crate) enum Fmt {
         arg: String,
         typ: Type,
         regex: String,
-        refute: Option<String>
+        refute: String,
     },
     /// Consecutive expressions that push to one argument is grouped together. 
     /// 
@@ -37,7 +37,7 @@ pub(crate) enum Fmt {
     Token {
         token: String,
     },
-    /// A consecutive spaces. 
+    /// Consecutive spaces. 
     Space,
 }
 
@@ -328,13 +328,13 @@ impl FmtParser {
         let (end, regex) = self.regstr(input, end)?;
         if let Ok(end) = Self::eat("}", input, end) {
             return Ok((end, Fmt::RegExp {
-                typ, arg, regex, refute: None
+                typ, arg, regex, refute: String::new()
             }));
         }
         let end = Self::eat("!", input, end)?;
         let (end, refute) = self.regstr(input, end)?;
         return Ok((end, Fmt::RegExp {
-            typ, arg, regex, refute: Some(refute)
+            typ, arg, regex, refute
         }))
     }
 }

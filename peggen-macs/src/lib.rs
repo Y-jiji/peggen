@@ -15,7 +15,13 @@ macro_rules! bail {
     }};
 }
 
-pub(crate) const CRATE: &str = "peggen";
+pub(crate) struct CRATE;
+
+impl ToTokens for CRATE {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(quote! { peggen })
+    }
+}
 
 /// Generate Parse<GROUP> trait(s) from rule attributes
 #[proc_macro_derive(ParseImpl, attributes(rule))]
@@ -42,7 +48,6 @@ pub fn ast_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_derive(PrependAstImpl)]
 pub fn prepend_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = bail!(parse::<DeriveInput>(input));
-    let _crate = parse_str::<Ident>(CRATE).unwrap();
     let generics = input.generics.params;
     let ident = input.ident;
     quote! {
@@ -52,9 +57,9 @@ pub fn prepend_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         {
             fn ast<'lifetime>(
                 input: &'lifetime str, 
-                stack: &'lifetime [#_crate::Tag], 
+                stack: &'lifetime [#CRATE::Tag], 
                 with: Extra
-            ) -> (&'lifetime [#_crate::Tag], Self) {
+            ) -> (&'lifetime [#CRATE::Tag], Self) {
                 let tag = &stack[stack.len()-1];
                 let mut stack = &stack[..stack.len()-1];
                 let mut this = <Self as Prepend<Extra>>::empty(with);

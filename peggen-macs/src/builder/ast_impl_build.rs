@@ -7,27 +7,22 @@ pub trait AstImplBuild {
 impl AstImplBuild for Builder {
     fn ast_impl_build(&self) -> Result<TokenStream> {
         // Prepare several tokens to be used later
-        let _crate = parse_str::<Ident>(CRATE).unwrap();
         let this = &self.ident;
+        // Build generics and where condition
         let generics = &self.generics.params;
         let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
         let generics = 
             if !comma && !generics.is_empty() { quote! { #generics, } }
             else                              { quote! { #generics  } };
-        let (front, with) = if let Some(with) = self.attrs.iter().filter(|x| x.path().is_ident("with")).next() {
-            (generics.clone(), with.meta.require_list()?.tokens.to_token_stream())
+        let (front, with) = if let Some(with) = self.with.clone() {
+            (generics.clone(), with)
         } else {
             (quote! { #generics Extra: Copy }, quote! { Extra })
         };
         let mut arms = TokenStream::new();
         // For each rule, construct a branch
         for (num, rule) in self.rules.iter().enumerate() {
-            // Add trace if trace presents
-            let this = &self.ident;
-            let variant = &rule.ident;
-            let trace_prolog = if rule.trace { quote! {
-                println!("phase 2 tag {}::{}", stringify!(#this), stringify!(#variant));
-            } } else { quote! {} };
+            let variant = &rule.variant;
             let mut argb = TokenStream::new();
             let mut argv = Vec::new();
             // Generate code for converting part of the tags into ast and remove them from stack. 
@@ -46,8 +41,7 @@ impl AstImplBuild for Builder {
                     Fmt::Symbol { arg, typ, .. } | Fmt::SeqExp { arg, typ, .. } => {
                         let arg = normalize(arg)?;
                         argb.extend(quote! {
-                            #trace_prolog
-                            let (stack, #arg) = <#typ as #_crate::AstImpl<#with>>::ast(input, stack, with);
+                            let (stack, #arg) = <#typ as #CRATE::AstImpl<#with>>::ast(input, stack, with);
                         });
                         argv.push(quote! { #arg, });
                     }
@@ -59,7 +53,7 @@ impl AstImplBuild for Builder {
                                 let tag = &stack[stack.len()-1];
                                 (
                                     &stack[..stack.len()-1],
-                                    <#typ as #_crate::FromStr<#with>>::from_str_with(&input[tag.span.clone()], with)
+                                    <#typ as #CRATE::FromStr<#with>>::from_str_with(&input[tag.span.clone()], with)
                                 )
                             };
                         });
@@ -68,17 +62,12 @@ impl AstImplBuild for Builder {
                     _ => {}
                 }
             }
-            // Merge arguments into an expression
+            // Construct the result ast args
             let argv = {
                 argv.reverse();
-                let mut stream = TokenStream::new();
-                for arg in argv { stream.extend(arg); }
-                stream
+                if rule.named { quote! { {#(#argv)*} } } 
+                else          { quote! { (#(#argv)*) } }
             };
-            // Construct the result ast
-            let argv = 
-                if rule.named { quote! { {#argv} } } 
-                else          { quote! { (#argv) } };
             // Return ast and the rest part of the stack
             arms.extend(if self.is_enum {
                 quote! { #num => {#argb; (stack, {Self::#variant #argv})} }
@@ -87,14 +76,14 @@ impl AstImplBuild for Builder {
             });
         }
         Ok(quote!{
-            impl<#front> #_crate::AstImpl<#with> for #this<#generics> {
+            impl<#front> #CRATE::AstImpl<#with> for #this<#generics> {
                 fn ast<'lifetime>(
                     input: &'lifetime str, 
-                    stack: &'lifetime [#_crate::Tag], 
+                    stack: &'lifetime [#CRATE::Tag], 
                     with: #with
-                ) -> (&'lifetime [#_crate::Tag], Self) {
+                ) -> (&'lifetime [#CRATE::Tag], Self) {
                     // Get the tag number
-                    let tag = stack[stack.len()-1].rule - <Self as #_crate::Num>::num(0);
+                    let tag = stack[stack.len()-1].rule - <Self as #CRATE::Num>::num(0);
                     // Remove the last element from stack, this will be processed by arms
                     let stack = &stack[..stack.len()-1];
                     // Get the tag, it should range from 0 to <RULES>

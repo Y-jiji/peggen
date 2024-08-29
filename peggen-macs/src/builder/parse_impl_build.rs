@@ -1,90 +1,75 @@
-use quote::ToTokens;
-
 use crate::*;
 
-pub trait ParserImplBuild {
-    fn parse_impl_build(&self) -> Result<TokenStream>;
-    fn parse_impl_group(&self, group: usize) -> Result<TokenStream>;
-}
-
-impl ParserImplBuild for Builder {
-    fn parse_impl_build(&self) -> Result<TokenStream> {
-        let mut output = TokenStream::new();
-        for group in 0..=self.group {
-            output.extend(self.parse_impl_group(group));
-        }
-        Ok(output)
-    }
-    fn parse_impl_group(&self, group: usize) -> Result<TokenStream> {
-        let mut body = TokenStream::new();
-        let _crate = parse_str::<Ident>(CRATE).unwrap();
-        for (num, rule) in self.rules.iter().enumerate() {
-            if rule.group < group { continue; }
-            let opt = quote! {
-                // Each rule either succeeds or don't proceed
-                if let Ok(end_) = <Self as #_crate::RuleImpl<#num, ERROR>>::rule_impl(input, begin, trace, stack) {
-                    let grow = end_ > end && trace.last().map(|(_, _, leftrec)| *leftrec).unwrap();
-                    end = end_;
-                    trace.last_mut().map(|(_, _, leftrec)| *leftrec = false);
-                    if grow { continue }
-                    else    { break true }
-                }
-            };
-            let opt = if rule.error {
-                quote! { if ERROR { #opt } }
-            } else {
-                quote! { #opt }
-            };
-            body.extend(quote! { #opt });
-        }
-        let this = &self.ident;
-        let generics = &self.generics.params;
-        let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
-        let generics = 
-            if !comma && !generics.is_empty() { quote! { #generics, } }
-            else                              { quote! { #generics  } };
-        let patt = self.rules.iter().enumerate().filter(|(_, rule)| rule.group >= group).map(|(num, _)| num);
-        let patt = patt.fold(None, |x, y| {
-            if let Some(x) = x { Some(quote! { #x | #y }) }
-            else { Some(quote! { #y }) }
-        }).ok_or(syn::Error::new_spanned(&self.ident, &format!("no element in group {group}")))?;
-        println!("{:?}", patt.to_string());
-        Ok(quote! {
-            impl<#generics const ERROR: bool> #_crate::ParseImpl<#group, ERROR> for #this<#generics> {
+impl Builder {
+    pub fn parse_impl_build(&self) -> Result<TokenStream> {
+        let mut impls = TokenStream::new();
+        let r#impl = |group, ident, generics, body, patt| quote! {
+            impl<const ERROR: bool, #generics> #CRATE::ParseImpl<#group, ERROR> for #ident<#generics> {
                 fn parse_impl(
-                    input: &str, mut end: usize,
-                    trace: &mut Vec<(usize, usize, bool)>,
-                    stack: &mut Vec<#_crate::Tag>,
+                    input: &str, end: usize,    // input[end..] represents the unparsed source
+                    depth: usize,               // left recursion depth
+                    first: bool,                // whether stack top is considered a token
+                    trace: &mut Vec<usize>,     // non-terminal symbols 
+                    stack: &mut Vec<Tag>,       // stack of suffix code
                 ) -> Result<usize, ()> {
-                    #_crate::stacker::maybe_grow(32*1024, 1024*1024, || {
-                        // if this is cached && rule is in group
-                        if stack.last().map(|top| 
-                            top.span.start == end && 
-                            matches!(top.rule, #patt)
-                        ).unwrap_or(false) {
-                            return Ok(stack.last().unwrap().span.end);
-                        }
-                        // if find a symbol at current position on the path, incur recursion error
-                        for (begin, symb, leftrec) in trace.iter_mut().rev() {
-                            if *begin < end { break }
-                            if *symb != <Self as #_crate::Num>::num(#group) { continue }
-                            *leftrec = true;
-                            Err(())?
-                        }
-                        let begin = end;
-                        // Try each rule repeatedly until nothing new occurs
-                        trace.push((end, <Self as #_crate::Num>::num(#group), false));
-                        let ok = loop {
-                            println!("LOOP\t{}", stringify!(#this));
-                            #body;
-                            break false
-                        };
-                        trace.pop();
-                        if ok { Ok(end) }
-                        else  { Err(()) }
-                    })
+                    // the symbol signature
+                    let symb = <Self as #CRATE::Num>::num(0);
+                    // if it is the matched first element
+                    if first && stack.last().map(|tag| tag.rule >= symb && matches!(tag.rule - symb, #patt)).unwrap_or(false) {
+                        return Ok(stack.last().map(|tag| tag.span.end).unwrap());
+                    }
+                    // if left recursion happened (amortized O(n*n), n = the number of symbols)
+                    for &node in &trace[trace.len().max(depth)-depth..] {
+                        if node == symb + #group { Err(())? }
+                    }
+                    // forbid symb + #group on the first element
+                    trace.push(symb + #group);
+                    let begin = end;
+                    let first = true;
+                    let end = #body; 
+                    trace.pop();
+                    // when body matches
+                    let mut end = end?;
+                    loop {match #body {
+                        Ok(end_) if end_ > end => { end = end_; continue }
+                        _ => { break }
+                    }};
+                    Ok(end)
                 }
             }
-        })
+        };
+        for group in 0..=self.group {
+            let body = self.parse_impl_group(group)?;
+            let patt = self.parse_patt_group(group)?;
+            impls.extend(r#impl(group, &self.ident, &self.generics, body, patt));
+        };
+        Ok(impls)
+    }
+    fn parse_patt_group(&self, group: usize) -> Result<TokenStream> {
+        let rule = self.rules.iter().enumerate()
+            .filter(|(_, rule)| rule.group >= group)
+            .map(|(num, _)| num);
+        Ok(quote! { #(#rule)|* })
+    }
+    fn parse_impl_group(&self, group: usize) -> Result<TokenStream> {
+        let rule = self.rules.iter().enumerate()
+            .filter(|(_, rule)| rule.group >= group)
+            .map(|(num, rule)| (num, rule.error))
+            .map(|(num, error)| quote! {
+                // if this rule is marked as an error handler, but currently we are not parsing in error mode
+                if #error && !ERROR { Err(()) }
+                // proceed normally
+                else { <Self as #CRATE::RuleImpl<#num, ERROR>>::rule_impl(input, end, depth, first, trace, stack) }
+            });
+        Ok(quote! {{(|| -> Result<usize, ()> {
+            #(match #rule {
+                // when any of the rule matches, choose it as the result
+                Ok(end) => {return Ok(end)}
+                // otherwise proceed to the next rule
+                Err(()) => {}
+            };)*
+            // when no rule matches
+            Err(())
+        })()}})
     }
 }

@@ -48,17 +48,21 @@ pub trait AstImpl<Extra: Copy> {
 
 pub trait ParseImpl<const GROUP: usize, const ERROR: bool> {
     fn parse_impl(
-        input: &str, end: usize,
-        trace: &mut Vec<(usize, usize, bool)>,
-        stack: &mut Vec<Tag>,
+        input: &str, end: usize,    // input[end..] represents the unparsed source
+        depth: usize,               // left recursion depth
+        first: bool,                // whether stack top is considered a token
+        trace: &mut Vec<usize>,     // non-terminal symbols 
+        stack: &mut Vec<Tag>,       // stack size
     ) -> Result<usize, ()>;
 }
 
 pub trait RuleImpl<const RULE: usize, const ERROR: bool> {
     fn rule_impl(
-        input: &str, end: usize,
-        trace: &mut Vec<(usize, usize, bool)>,
-        stack: &mut Vec<Tag>,
+        input: &str, end: usize,    // input[end..] represents the unparsed source
+        depth: usize,               // left recursion depth
+        first: bool,                // whether stack top is considered a token
+        trace: &mut Vec<usize>,     // non-terminal symbols 
+        stack: &mut Vec<Tag>,       // stack size
     ) -> Result<usize, ()>;
 }
 

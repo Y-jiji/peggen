@@ -14,7 +14,7 @@ impl<T> Parser<T> {
         let mut trace = Vec::new();
         let mut stack = Vec::new();
         let end = 0;
-        <T as ParseImpl<0, false>>::parse_impl(input, end, &mut trace, &mut stack)?;
+        <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
         // Analyze the tag stack into this value
         Ok(T::ast(input, &stack, ()).1)
     }
@@ -27,7 +27,7 @@ impl<T> Parser<T> {
         let mut trace = Vec::new();
         let mut stack = Vec::new();
         let end = 0;
-        <T as ParseImpl<0, false>>::parse_impl(input, end, &mut trace, &mut stack)?;
+        <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
         // Analyze the tag stack into this value, with extra value attached
         Ok(T::ast(input, &stack, with).1)
     }
@@ -38,7 +38,7 @@ impl<T> Parser<T> {
         let mut trace = Vec::new();
         let mut stack = Vec::new();
         let end = 0;
-        <T as ParseImpl<0, false>>::parse_impl(input, end, &mut trace, &mut stack)?;
+        <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
         Ok(stack)
     }
 }

@@ -19,7 +19,7 @@ pub(crate) struct Rule {
     trace: bool,
     error: bool,
     exprs: Vec<Fmt>,
-    ident: Ident,
+    variant: Ident,
 }
 
 impl Rule {
@@ -30,7 +30,7 @@ impl Rule {
             error: false,
             trace: false,
             exprs: vec![],
-            ident: ident.clone(),
+            variant: ident.clone(),
         };
         let fmt = FmtParser::new(fields)?;
         // The arguments to parse
@@ -113,7 +113,7 @@ pub(crate) struct Builder {
     /// The identity of this type
     ident: Ident,
     /// The attributes attached to type
-    attrs: Vec<Attribute>,
+    with: Option<TokenStream>,
     /// The generics of this type
     generics: Generics,
 }
@@ -128,10 +128,13 @@ impl std::fmt::Debug for Builder {
 impl Builder {
     pub fn new(input: DeriveInput) -> Result<Self> {
         let mut this = Builder {
+            with: match input.attrs.iter().filter(|x| x.path().is_ident("with")).next().cloned() {
+                None => None,
+                Some(Attribute { meta, .. }) => Some(meta.require_list()?.tokens.to_token_stream()),
+            },
             rules: vec![],
             group: 0,
             is_enum: false,
-            attrs: input.attrs.clone(),
             ident: input.ident.clone(),
             generics: input.generics.clone()
         };
