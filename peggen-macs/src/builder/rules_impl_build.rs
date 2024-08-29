@@ -39,7 +39,7 @@ impl Builder {
                 stack.resize_with(size, || unreachable!());
                 Err(())?
             };)*
-            Ok(end)
+            Ok::<_, ()>(end)
         })()}})
     }
     // fmt: the format string to translate
@@ -47,7 +47,7 @@ impl Builder {
     fn rules_item_build(&self, fmt: &Fmt, mut head: bool) -> Result<TokenStream> {
         use Fmt::*;
         match fmt {
-            Space => {Ok(quote! {Self::space()})}
+            Space => {Ok(quote! {Self::space(input, end)})}
             Token { token } => {Ok(quote! {{
                 // if regex is the first token, and the stack top is considered as a token
                 // then certainly this will not match
@@ -55,7 +55,7 @@ impl Builder {
                 // if the prefix matches the token, 
                 // remove token from input stream and proceed
                 else if input[end..].starts_with(#token) {
-                    Ok(end + #token.len())
+                    Ok::<_, ()>(end + #token.len())
                 } else { Err(()) }
             }})}
             Symbol { typ, group, .. } => {Ok(quote! {
@@ -92,7 +92,7 @@ impl Builder {
                         Err(())
                     } else {
                         stack.push(Tag { rule: 0, span: begin..end });
-                        Ok(end)
+                        Ok::<_, ()>(end)
                     }
                 }
             })()}})}
@@ -106,12 +106,12 @@ impl Builder {
                             while let Ok(end_) = #result {
                                 end = end_;
                             }
-                            Ok(end)
+                            Ok::<_, ()>(end)
                         }})}
                         Flag::OrNot => {Ok(quote! {{
                             match #result {
-                                Ok(end) => Ok(end),
-                                Err(()) => Ok(end),
+                                Ok(end) => Ok::<_, ()>(end),
+                                Err(()) => Ok::<_, ()>(end),
                             }
                         }})}
                         Flag::Just => {Ok(result)}
@@ -126,7 +126,7 @@ impl Builder {
                         stack.resize_with(size, || unreachable!());
                         Err(())?
                     };)*
-                    Ok(end)
+                    Ok::<_, ()>(end)
                 })()}})
             }
         }
