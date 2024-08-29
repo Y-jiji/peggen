@@ -135,25 +135,16 @@ impl RulesImplBuild for Builder {
                         trace: &mut Vec<(usize, usize, bool)>,
                         stack: &mut Vec<#_crate::Tag>,
                     ) -> Result<usize, ()> {
+                        println!("TRY\t{}::{}", stringify!(#this), stringify!(#_var));
                         let size = stack.len();
                         let rule = <Self as #_crate::Num>::num(#rule);
                         let begin = end;
-                        if stack.last().map(|top| 
-                            top.span.start == end && 
-                            top.rule == rule
-                        ).unwrap_or(false) {
-                            println!("REST\t{}", &input[begin..]);
-                            println!("RULE\t{}::{}", stringify!(#this), stringify!(#_var));
-                            println!("TAKE\t{}", &input[begin..stack.last().unwrap().span.end]);
-                            Ok(stack.last().unwrap().span.end)
-                        } else {
-                            #body
-                            stack.push(#_crate::Tag { rule, span: begin..end });
-                            println!("REST\t{}", &input[begin..]);
-                            println!("RULE\t{}::{}", stringify!(#this), stringify!(#_var));
-                            println!("TAKE\t{}", &input[begin..end]);
-                            Ok(end)
-                        }
+                        #body
+                        stack.push(#_crate::Tag { rule, span: begin..end });
+                        println!("REST\t{}", &input[begin..]);
+                        println!("RULE\t{}::{}", stringify!(#this), stringify!(#_var));
+                        println!("TAKE\t{}", &input[begin..end]);
+                        Ok(end)
                     }
                 }
             })

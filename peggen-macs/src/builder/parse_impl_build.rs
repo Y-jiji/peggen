@@ -23,10 +23,11 @@ impl ParserImplBuild for Builder {
             let opt = quote! {
                 // Each rule either succeeds or don't proceed
                 if let Ok(end_) = <Self as #_crate::RuleImpl<#num, ERROR>>::rule_impl(input, begin, trace, stack) {
-                    let leftrec = trace.last().map(|(_, _, leftrec)| *leftrec).unwrap();
+                    let grow = end_ > end && trace.last().map(|(_, _, leftrec)| *leftrec).unwrap();
                     end = end_;
-                    if leftrec { continue }
-                    else       { break true }
+                    trace.last_mut().map(|(_, _, leftrec)| *leftrec = false);
+                    if grow { continue }
+                    else    { break true }
                 }
             };
             let opt = if rule.error {
@@ -42,6 +43,12 @@ impl ParserImplBuild for Builder {
         let generics = 
             if !comma && !generics.is_empty() { quote! { #generics, } }
             else                              { quote! { #generics  } };
+        let patt = self.rules.iter().enumerate().filter(|(_, rule)| rule.group >= group).map(|(num, _)| num);
+        let patt = patt.fold(None, |x, y| {
+            if let Some(x) = x { Some(quote! { #x | #y }) }
+            else { Some(quote! { #y }) }
+        }).ok_or(syn::Error::new_spanned(&self.ident, &format!("no element in group {group}")))?;
+        println!("{:?}", patt.to_string());
         Ok(quote! {
             impl<#generics const ERROR: bool> #_crate::ParseImpl<#group, ERROR> for #this<#generics> {
                 fn parse_impl(
@@ -50,6 +57,13 @@ impl ParserImplBuild for Builder {
                     stack: &mut Vec<#_crate::Tag>,
                 ) -> Result<usize, ()> {
                     #_crate::stacker::maybe_grow(32*1024, 1024*1024, || {
+                        // if this is cached && rule is in group
+                        if stack.last().map(|top| 
+                            top.span.start == end && 
+                            matches!(top.rule, #patt)
+                        ).unwrap_or(false) {
+                            return Ok(stack.last().unwrap().span.end);
+                        }
                         // if find a symbol at current position on the path, incur recursion error
                         for (begin, symb, leftrec) in trace.iter_mut().rev() {
                             if *begin < end { break }
@@ -59,11 +73,9 @@ impl ParserImplBuild for Builder {
                         }
                         let begin = end;
                         // Try each rule repeatedly until nothing new occurs
-                        // This should happen on each rule, not each symbol
                         trace.push((end, <Self as #_crate::Num>::num(#group), false));
                         let ok = loop {
                             println!("LOOP\t{}", stringify!(#this));
-                            trace.last_mut().map(|(_, _, leftrec)| *leftrec = false);
                             #body;
                             break false
                         };
