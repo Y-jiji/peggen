@@ -55,11 +55,11 @@ impl Builder {
                 // if the prefix matches the token, 
                 // remove token from input stream and proceed
                 else if input[end..].starts_with(#token) {
-                    Ok(end + token.len())
-                } else { Err() }
+                    Ok(end + #token.len())
+                } else { Err(()) }
             }})}
             Symbol { typ, group, .. } => {Ok(quote! {
-                <#typ as #CRATE::ParseImpl<#group>>::parse_impl(
+                <#typ as #CRATE::ParseImpl<#group, ERROR>>::parse_impl(
                     // pass 'input' and 'end' as-is
                     input, end,
                     // if it is the head, add 1 to left recursion depth
