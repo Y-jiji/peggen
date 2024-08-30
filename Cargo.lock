@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "peggen-macs"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "once_cell",
  "proc-macro2",
