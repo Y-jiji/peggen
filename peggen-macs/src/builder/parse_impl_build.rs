@@ -18,7 +18,6 @@ impl Builder {
                     if first && stack.last().map(|tag| tag.rule >= symb && matches!(tag.rule - symb, #patt)).unwrap_or(false) {
                         return Ok(stack.last().map(|tag| tag.span.end).unwrap());
                     }
-                    println!("GROUP\t{}<{}>", stringify!(#ident), #group);
                     // if left recursion happened (amortized O(n*n), n = the number of symbols)
                     for &node in &trace[trace.len().max(depth)-depth..] {
                         if node == symb + #group { Err(())? }

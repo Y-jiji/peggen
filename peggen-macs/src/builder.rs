@@ -142,7 +142,6 @@ impl Builder {
                 p
             }
         };
-        println!("{}", input.generics.to_token_stream());
         match input.data {
             Data::Struct(r#struct) => {
                 for attr in input.attrs {

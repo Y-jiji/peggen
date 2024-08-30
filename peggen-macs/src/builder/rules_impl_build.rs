@@ -4,7 +4,7 @@ impl Builder {
     // build the rule trait(s) for the given type
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
-        let r#impl = |num, ident, variant, generics, body| quote! {
+        let r#impl = |num, ident, variant, generics, body, trace| quote! {
             impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
                 fn rule_impl(
                     input: &str, end: usize,        // input[end..] represents the unparsed source
@@ -15,22 +15,26 @@ impl Builder {
                 ) -> Result<usize, ()> {
                     let begin = end;
                     let Ok(end) = (#body) else {
-                        println!("REST\t{}", &input[begin..]);
-                        println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
-                        println!("REJECT");
+                        if #trace {
+                            println!("REST\t{}", &input[begin..]);
+                            println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
+                            println!("REJECT");
+                        }                    
                         Err(())?
                     };
                     stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: begin..end });
-                    println!("REST\t{}", &input[begin..]);
-                    println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
-                    println!("TAKE\t{}", &input[begin..end]);
+                    if #trace {
+                        println!("REST\t{}", &input[begin..]);
+                        println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
+                        println!("TAKE\t{}", &input[begin..end]);
+                    }
                     Ok(end)
                 }
             }
         };
         for (num, rule) in self.rules.iter().enumerate() {
             let body = self.rules_vect_build(&rule.exprs, true)?;
-            impls.extend(r#impl(num, &self.ident, &rule.variant, &self.generics, body));
+            impls.extend(r#impl(num, &self.ident, &rule.variant, &self.generics, body, rule.trace));
         };
         Ok(impls)
     }
