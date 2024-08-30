@@ -1,6 +1,8 @@
 use std::sync::LazyLock;
+use punctuated::Punctuated;
 use quote::ToTokens;
 use regex::Regex;
+use token::Comma;
 
 use crate::*;
 mod ast_impl_build;
@@ -113,7 +115,7 @@ pub(crate) struct Builder {
     /// The attributes attached to type
     with: Option<TokenStream>,
     /// The generics of this type
-    generics: Generics,
+    generics: Punctuated<GenericParam, Comma>,
 }
 
 impl std::fmt::Debug for Builder {
@@ -134,8 +136,13 @@ impl Builder {
             group: 0,
             is_enum: false,
             ident: input.ident.clone(),
-            generics: input.generics.clone()
+            generics: {
+                let mut p = input.generics.clone().params;
+                if !p.empty_or_trailing() { p.push_punct(Comma::default()); }
+                p
+            }
         };
+        println!("{}", input.generics.to_token_stream());
         match input.data {
             Data::Struct(r#struct) => {
                 for attr in input.attrs {

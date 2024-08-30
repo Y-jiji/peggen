@@ -5,13 +5,13 @@ impl Builder {
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
         let r#impl = |num, ident, variant, generics, body| quote! {
-            impl<const ERROR: bool, #generics> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
+            impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
                 fn rule_impl(
-                    input: &str, end: usize,    // input[end..] represents the unparsed source
-                    depth: usize,               // left recursion depth
-                    first: bool,                // whether stack top is considered a token
-                    trace: &mut Vec<usize>,     // non-terminal symbols 
-                    stack: &mut Vec<#CRATE::Tag>,       // stack of suffix code
+                    input: &str, end: usize,        // input[end..] represents the unparsed source
+                    depth: usize,                   // left recursion depth
+                    first: bool,                    // whether stack top is considered a token
+                    trace: &mut Vec<usize>,         // non-terminal symbols 
+                    stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
                 ) -> Result<usize, ()> {
                     let begin = end;
                     let Ok(end) = (#body) else {
@@ -36,7 +36,7 @@ impl Builder {
     }
     // build a vector of rules
     fn rules_vect_build(&self, seq: &[Fmt], mut head: bool) -> Result<TokenStream> {    
-        let seq = seq.iter().map(|fmt| {
+        let seq = seq.iter().map(|fmt: &Fmt| {
             let result = self.rules_item_build(fmt, head)?;
             head = false;
             Ok(result)
@@ -102,7 +102,7 @@ impl Builder {
                     if #refute.len() != 0 && REGEX.is_match(&input[begin..end]) {
                         Err(())
                     } else {
-                        stack.push(Tag { rule: 0, span: begin..end });
+                        stack.push(#CRATE::Tag { rule: 0, span: begin..end });
                         Ok::<_, ()>(end)
                     }
                 }

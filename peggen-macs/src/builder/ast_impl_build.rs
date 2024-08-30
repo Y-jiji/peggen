@@ -9,7 +9,7 @@ impl AstImplBuild for Builder {
         // Prepare several tokens to be used later
         let this = &self.ident;
         // Build generics and where condition
-        let generics = &self.generics.params;
+        let generics = &self.generics;
         let comma = generics.to_token_stream().into_iter().last().map(|x| x.to_string() == ",").unwrap_or(false);
         let generics = 
             if !comma && !generics.is_empty() { quote! { #generics, } }

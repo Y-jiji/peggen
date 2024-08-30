@@ -1,27 +1,27 @@
-// use std::fmt::Debug;
-// use peggen::*;
+use std::fmt::Debug;
+use peggen::*;
 
-// #[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
-// pub enum Json {
-//     #[rule("{0:`false|true`}")]
-//     Bool(bool),
-//     #[rule("{0:`0|-?[1-9][0-9]*`}")]
-//     Int(i64),
-//     #[rule(r"\{ [*0: {0:`[a-zA-Z]+`} : {1} , ][?0: {0:`[a-zA-Z]+`} : {1} ] \}")]
-//     Obj(RVec<(String, Json)>),
-//     #[rule(r"\[ [*0: {0} , ][?0: {0} ] \]")]
-//     Arr(RVec<Json>),
-// }
+#[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
+pub enum Json {
+    #[rule("{0:`false|true`}")]
+    Bool(bool),
+    #[rule("{0:`0|-?[1-9][0-9]*`}")]
+    Int(i64),
+    #[rule(r"\{ [*0: {0:`[a-zA-Z]+`} : {1} , ][?0: {0:`[a-zA-Z]+`} : {1} ] \}")]
+    Obj(RVec<(String, Json)>),
+    #[rule(r"\[ [*0: {0} , ][?0: {0} ] \]")]
+    Arr(RVec<Json>),
+}
 
-// #[cfg(test)]
-// mod test {
-//     use peggen::*;
-//     use super::*;
+#[cfg(test)]
+mod test {
+    use peggen::*;
+    use super::*;
 
-//     #[test]
-//     fn json() {
-//         let json = r"{x: 1, y: [2, 3], z: false}";
-//         let json = Parser::<Json>::parse(json).unwrap();
-//         println!("{json:?}");
-//     }
-// }
+    #[test]
+    fn json() {
+        let json = r"{x: 1, y: [2, 3], z: false}";
+        let json = Parser::<Json>::parse(json).unwrap();
+        println!("{json:?}");
+    }
+}

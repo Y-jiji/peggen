@@ -4,13 +4,13 @@ impl Builder {
     pub fn parse_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
         let r#impl = |group, ident, generics, body, patt| quote! {
-            impl<const ERROR: bool, #generics> #CRATE::ParseImpl<#group, ERROR> for #ident<#generics> {
+            impl<#generics const ERROR: bool> #CRATE::ParseImpl<#group, ERROR> for #ident<#generics> {
                 fn parse_impl(
-                    input: &str, end: usize,    // input[end..] represents the unparsed source
-                    depth: usize,               // left recursion depth
-                    first: bool,                // whether stack top is considered a token
-                    trace: &mut Vec<usize>,     // non-terminal symbols 
-                    stack: &mut Vec<#CRATE::Tag>,       // stack of suffix code
+                    input: &str, end: usize,        // input[end..] represents the unparsed source
+                    depth: usize,                   // left recursion depth
+                    first: bool,                    // whether stack top is considered a token
+                    trace: &mut Vec<usize>,         // non-terminal symbols 
+                    stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
                 ) -> Result<usize, ()> {
                     // the symbol signature
                     let symb = <Self as #CRATE::Num>::num(0);
