@@ -22,8 +22,7 @@ mod test {
 
     #[test]
     fn ty() {
-        let ty = r"int";
-        let ty = Parser::<Ty>::parse(ty).unwrap();
+        let ty = Parser::<Ty>::parse("{x: integer}").unwrap();
         println!("{ty:?}");
     }
 }

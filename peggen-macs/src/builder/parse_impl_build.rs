@@ -10,7 +10,7 @@ impl Builder {
                     depth: usize,               // left recursion depth
                     first: bool,                // whether stack top is considered a token
                     trace: &mut Vec<usize>,     // non-terminal symbols 
-                    stack: &mut Vec<Tag>,       // stack of suffix code
+                    stack: &mut Vec<#CRATE::Tag>,       // stack of suffix code
                 ) -> Result<usize, ()> {
                     // the symbol signature
                     let symb = <Self as #CRATE::Num>::num(0);
@@ -18,6 +18,7 @@ impl Builder {
                     if first && stack.last().map(|tag| tag.rule >= symb && matches!(tag.rule - symb, #patt)).unwrap_or(false) {
                         return Ok(stack.last().map(|tag| tag.span.end).unwrap());
                     }
+                    println!("GROUP\t{}<{}>", stringify!(#ident), #group);
                     // if left recursion happened (amortized O(n*n), n = the number of symbols)
                     for &node in &trace[trace.len().max(depth)-depth..] {
                         if node == symb + #group { Err(())? }
@@ -25,12 +26,13 @@ impl Builder {
                     // forbid symb + #group on the first element
                     trace.push(symb + #group);
                     let begin = end;
-                    let first = true;
-                    let end = #body; 
+                    let end = #body;
                     trace.pop();
-                    // when body matches
+                    // from here, we consider previously matched results as the first token. 
                     let mut end = end?;
-                    loop {match #body {
+                    let first = true;
+                    // grow the results
+                    loop {match {let end = begin; #body} {
                         Ok(end_) if end_ > end => { end = end_; continue }
                         _ => { break }
                     }};

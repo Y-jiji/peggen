@@ -4,22 +4,33 @@ impl Builder {
     // build the rule trait(s) for the given type
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
-        let r#impl = |num, ident, generics, body| quote! {
+        let r#impl = |num, ident, variant, generics, body| quote! {
             impl<const ERROR: bool, #generics> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
                 fn rule_impl(
                     input: &str, end: usize,    // input[end..] represents the unparsed source
                     depth: usize,               // left recursion depth
                     first: bool,                // whether stack top is considered a token
                     trace: &mut Vec<usize>,     // non-terminal symbols 
-                    stack: &mut Vec<Tag>,       // stack of suffix code
+                    stack: &mut Vec<#CRATE::Tag>,       // stack of suffix code
                 ) -> Result<usize, ()> {
-                    #body
+                    let begin = end;
+                    let Ok(end) = (#body) else {
+                        println!("REST\t{}", &input[begin..]);
+                        println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
+                        println!("REJECT");
+                        Err(())?
+                    };
+                    stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: begin..end });
+                    println!("REST\t{}", &input[begin..]);
+                    println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
+                    println!("TAKE\t{}", &input[begin..end]);
+                    Ok(end)
                 }
             }
         };
         for (num, rule) in self.rules.iter().enumerate() {
             let body = self.rules_vect_build(&rule.exprs, true)?;
-            impls.extend(r#impl(num, &self.ident, &self.generics, body));
+            impls.extend(r#impl(num, &self.ident, &rule.variant, &self.generics, body));
         };
         Ok(impls)
     }
@@ -78,11 +89,11 @@ impl Builder {
                 if #head && first { Err(())? }
                 // when the prefix matches the regex, 
                 // remove the matched part from input stream and proceed
-                static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| 
+                static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
                     #CRATE::Regex::new(concat!("^(", #regex, ")")).unwrap()
-                );
+                });
                 let begin = end;
-                let end = REGEX.find(&input[end..]).map(|mat| mat.range().end).ok_or(())?;
+                let end = begin + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
                 // if the matched string matches the refute pattern
                 {
                     static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| 
@@ -102,19 +113,26 @@ impl Builder {
                     head = false;
                     match flag {
                         Flag::Repeat => {Ok(quote! {{
+                            let begin = end;
                             let mut end = end;
                             while let Ok(end_) = #result {
                                 end = end_;
+                                cnt = cnt + 1;
                             }
                             Ok::<_, ()>(end)
                         }})}
                         Flag::OrNot => {Ok(quote! {{
                             match #result {
-                                Ok(end) => Ok::<_, ()>(end),
-                                Err(()) => Ok::<_, ()>(end),
+                                Ok(end) => {cnt += 1; Ok::<_, ()>(end)}
+                                Err(()) => {cnt += 0; Ok::<_, ()>(end)}
                             }
                         }})}
-                        Flag::Just => {Ok(result)}
+                        Flag::Just => {Ok(quote! {{
+                            match #result {
+                                Ok(end) => {cnt += 1; Ok::<_, ()>(end)}
+                                Err(()) => {Err(())}
+                            }
+                        }})}
                     }
                 }).fold(Ok(vec![]), |v: Result<_>, x: Result<_> | {
                     let mut v = v?;
@@ -122,10 +140,13 @@ impl Builder {
                 })?;
                 Ok(quote!{{(|| -> Result<usize, ()> {
                     let size = stack.len();
+                    let mut cnt = 0;
+                    let begin = end;
                     #(let Ok(end) = (#children) else {
                         stack.resize_with(size, || unreachable!());
                         Err(())?
                     };)*
+                    stack.push(#CRATE::Tag { rule: cnt, span: begin..end });
                     Ok::<_, ()>(end)
                 })()}})
             }
