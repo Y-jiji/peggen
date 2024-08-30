@@ -22,7 +22,7 @@ mod test {
 
     #[test]
     fn ty() {
-        let ty = Parser::<Ty>::parse("{x: integer}").unwrap();
+        let ty = Parser::<Ty>::parse("{x: integer, y: int}").unwrap();
         println!("{ty:?}");
     }
 }
