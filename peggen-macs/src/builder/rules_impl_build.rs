@@ -6,6 +6,7 @@ impl Builder {
         let mut impls = TokenStream::new();
         let r#impl = |num, ident, generics, variant, trace, body| quote! {
             impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
+                #[inline(always)]
                 fn rule_impl(
                     input: &str, end: usize,        // input[end..] represents the unparsed source
                     depth: usize,                   // left recursion depth
