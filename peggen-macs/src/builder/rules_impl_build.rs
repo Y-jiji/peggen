@@ -13,21 +13,11 @@ impl Builder {
                     trace: &mut Vec<usize>,         // non-terminal symbols 
                     stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
                 ) -> Result<usize, ()> {
-                    let begin = end;
-                    let Ok(end) = (#body) else {
-                        if #trace {
-                            println!("REST\t{}", &input[begin..]);
-                            println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
-                            println!("REJECT");
-                        }                    
-                        Err(())?
-                    };
-                    stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: begin..end });
-                    if #trace {
-                        println!("REST\t{}", &input[begin..]);
-                        println!("RULE\t{}::{}", stringify!(#ident), stringify!(#variant));
-                        println!("TAKE\t{}", &input[begin..end]);
-                    }
+                    let start = end;
+                    let size = stack.len();
+                    let end = (#body)?;
+                    #CRATE::stack_sanity_check(input, stack, start..end);
+                    stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
                     Ok(end)
                 }
             }
@@ -62,7 +52,10 @@ impl Builder {
     fn rules_item_build(&self, fmt: &Fmt, mut head: bool) -> Result<TokenStream> {
         use Fmt::*;
         match fmt {
-            Space => {Ok(quote! {Self::space(input, end)})}
+            Space => {Ok(quote! {
+                if #head && first { Err(()) }
+                else { Self::space(input, end) }
+            })}
             Token { token } => {Ok(quote! {{
                 // if regex is the first token, and the stack top is considered as a token
                 // then certainly this will not match
@@ -96,17 +89,18 @@ impl Builder {
                 static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
                     #CRATE::Regex::new(concat!("^(", #regex, ")")).unwrap()
                 });
-                let begin = end;
-                let end = begin + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
+                let start = end;
+                let end = start + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
                 // if the matched string matches the refute pattern
                 {
                     static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| 
                         #CRATE::Regex::new(concat!("^(", #refute, ")$")).unwrap()
                     );
-                    if #refute.len() != 0 && REGEX.is_match(&input[begin..end]) {
+                    if #refute.len() != 0 && REGEX.is_match(&input[start..end]) {
                         Err(())
                     } else {
-                        stack.push(#CRATE::Tag { rule: 0, span: begin..end });
+                        #CRATE::stack_sanity_check(input, stack, start..end);
+                        stack.push(#CRATE::Tag { rule: 0, span: start..end });
                         Ok::<_, ()>(end)
                     }
                 }
@@ -117,7 +111,7 @@ impl Builder {
                     head = false;
                     match flag {
                         Flag::Repeat => {Ok(quote! {{
-                            let begin = end;
+                            let start = end;
                             let mut end = end;
                             while let Ok(end_) = #result {
                                 end = end_;
@@ -145,12 +139,13 @@ impl Builder {
                 Ok(quote!{{(|| -> Result<usize, ()> {
                     let size = stack.len();
                     let mut cnt = 0;
-                    let begin = end;
+                    let start = end;
                     #(let Ok(end) = (#children) else {
                         stack.resize_with(size, || unreachable!());
                         Err(())?
                     };)*
-                    stack.push(#CRATE::Tag { rule: cnt, span: begin..end });
+                    #CRATE::stack_sanity_check(input, stack, start..end);
+                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
                     Ok::<_, ()>(end)
                 })()}})
             }

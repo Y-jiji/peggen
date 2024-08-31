@@ -80,3 +80,19 @@ pub trait Space {
         return Ok(input.len())
     }
 }
+
+#[inline(always)]
+pub fn stack_sanity_check(input: &str, stack: &[Tag], span: core::ops::Range<usize>) {
+    // only check this when it is in debug mode
+    #[cfg(debug_assertions)] {
+        let san = stack.last().map(|tag| (tag.span.start >= span.start && tag.span.end <= span.end) || tag.span.end <= span.start).unwrap_or(true);
+        if san { return }
+        use alloc::string::String;
+        let mut s = String::new();
+        for tag in stack.iter().rev() {
+            use core::fmt::Write;
+            writeln!(&mut s, "{:?}", &input[tag.span.clone()]).unwrap();
+        }
+        panic!("failed stack sanity check:\n{}", s.trim());
+    }
+}

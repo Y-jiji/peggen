@@ -24,14 +24,14 @@ impl Builder {
                     }
                     // forbid symb + #group on the first element
                     trace.push(symb + #group);
-                    let begin = end;
+                    let start = end;
                     let end = #body;
                     trace.pop();
                     // from here, we consider previously matched results as the first token. 
                     let mut end = end?;
                     let first = true;
                     // grow the results
-                    loop {match {let end = begin; #body} {
+                    loop {match {let end = start; #body} {
                         Ok(end_) if end_ > end => { end = end_; continue }
                         _ => { break }
                     }};
