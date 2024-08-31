@@ -4,7 +4,7 @@ impl Builder {
     // build the rule trait(s) for the given type
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
-        let r#impl = |num, ident, generics, variant, body| quote! {
+        let r#impl = |num, ident, generics, variant, trace, body| quote! {
             impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
                 fn rule_impl(
                     input: &str, end: usize,        // input[end..] represents the unparsed source
@@ -13,15 +13,20 @@ impl Builder {
                     trace: &mut Vec<usize>,         // non-terminal symbols 
                     stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
                 ) -> Result<usize, ()> {
-                    println!("START\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);
-                    let start = end;
-                    let size = stack.len();
-                    let mut head = true;
+                    if #trace {
+                        println!("START\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);
+                    }
+                    let start = end;        // this is the starting point of this parsing pass
+                    let mut head = true;    // tracks if it is the first sub-peg (might be modified by sub pegs)
                     let Ok(end) = (#body) else {
-                        println!("ERR\t{}::{}", stringify!(#ident), stringify!(#variant));
+                        if #trace {
+                            println!("ERR\t{}::{}", stringify!(#ident), stringify!(#variant));
+                        }
                         return Err(());
                     };
-                    println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);
+                    if #trace {
+                        println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);
+                    }
                     #CRATE::stack_sanity_check(input, stack, start..end);
                     stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
                     Ok(end)
@@ -30,7 +35,7 @@ impl Builder {
         };
         for (num, rule) in self.rules.iter().enumerate() {
             let body = self.rules_vect_build(&rule.exprs)?;
-            impls.extend(r#impl(num, &self.ident, &self.generics, &rule.variant, body));
+            impls.extend(r#impl(num, &self.ident, &self.generics, &rule.variant, rule.trace, body));
         };
         Ok(impls)
     }
@@ -122,26 +127,26 @@ impl Builder {
                 }
             })()}})}
             SeqExp { children, .. } => {
-                let children = children.iter().map(|(seq, flag)| {
-                    let result = self.rules_vect_build(seq)?;
+                let children = children.iter().map(|(subfmt, flag)| {
+                    let subfmt = self.rules_vect_build(subfmt)?;
                     match flag {
                         Flag::Repeat => {Ok(quote! {{
                             let start = end;
                             let mut end = end;
-                            while let Ok(end_) = #result {
+                            while let Ok(end_) = #subfmt {
                                 end = end_;
                                 cnt = cnt + 1;
                             }
                             Ok::<_, ()>(end)
                         }})}
                         Flag::OrNot => {Ok(quote! {{
-                            match #result {
+                            match #subfmt {
                                 Ok(end) => {cnt += 1; Ok::<_, ()>(end)}
                                 Err(()) => {cnt += 0; Ok::<_, ()>(end)}
                             }
                         }})}
                         Flag::Just => {Ok(quote! {{
-                            match #result {
+                            match #subfmt {
                                 Ok(end) => {cnt += 1; Ok::<_, ()>(end)}
                                 Err(()) => {Err(())}
                             }
