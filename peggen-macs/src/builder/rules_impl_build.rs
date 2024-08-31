@@ -4,7 +4,7 @@ impl Builder {
     // build the rule trait(s) for the given type
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
-        let r#impl = |num, ident, generics, body| quote! {
+        let r#impl = |num, ident, generics, variant, body| quote! {
             impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
                 fn rule_impl(
                     input: &str, end: usize,        // input[end..] represents the unparsed source
@@ -13,9 +13,15 @@ impl Builder {
                     trace: &mut Vec<usize>,         // non-terminal symbols 
                     stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
                 ) -> Result<usize, ()> {
+                    println!("START\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);
                     let start = end;
                     let size = stack.len();
-                    let end = (#body)?;
+                    let mut head = true;
+                    let Ok(end) = (#body) else {
+                        println!("ERR\t{}::{}", stringify!(#ident), stringify!(#variant));
+                        return Err(());
+                    };
+                    println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);
                     #CRATE::stack_sanity_check(input, stack, start..end);
                     stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
                     Ok(end)
@@ -23,16 +29,15 @@ impl Builder {
             }
         };
         for (num, rule) in self.rules.iter().enumerate() {
-            let body = self.rules_vect_build(&rule.exprs, true)?;
-            impls.extend(r#impl(num, &self.ident, &self.generics, body));
+            let body = self.rules_vect_build(&rule.exprs)?;
+            impls.extend(r#impl(num, &self.ident, &self.generics, &rule.variant, body));
         };
         Ok(impls)
     }
     // build a vector of rules
-    fn rules_vect_build(&self, seq: &[Fmt], mut head: bool) -> Result<TokenStream> {    
+    fn rules_vect_build(&self, seq: &[Fmt]) -> Result<TokenStream> {    
         let seq = seq.iter().map(|fmt: &Fmt| {
-            let result = self.rules_item_build(fmt, head)?;
-            head = false;
+            let result = self.rules_item_build(fmt)?;
             Ok(result)
         }).fold(Ok(vec![]), |v: Result<_>, x: Result<_> | {
             let mut v = v?;
@@ -49,41 +54,50 @@ impl Builder {
     }
     // fmt: the format string to translate
     // head: if the format string is the first symbol in this rule
-    fn rules_item_build(&self, fmt: &Fmt, mut head: bool) -> Result<TokenStream> {
+    fn rules_item_build(&self, fmt: &Fmt) -> Result<TokenStream> {
         use Fmt::*;
         match fmt {
             Space => {Ok(quote! {
-                if #head && first { Err(()) }
-                else { Self::space(input, end) }
+                if head && first { Err(()) }
+                else if let Ok(end_) = Self::space(input, end) {
+                    head &= end_ == end;
+                    Ok(end_)
+                }
+                else { Err(()) }
             })}
             Token { token } => {Ok(quote! {{
                 // if regex is the first token, and the stack top is considered as a token
                 // then certainly this will not match
-                if #head && first { Err(()) }
+                if head && first { Err(()) }
                 // if the prefix matches the token, 
                 // remove token from input stream and proceed
                 else if input[end..].starts_with(#token) {
+                    head &= #token.len() == 0;
                     Ok::<_, ()>(end + #token.len())
-                } else { Err(()) }
+                }
+                else { Err(()) }
             }})}
-            Symbol { typ, group, .. } => {Ok(quote! {
-                <#typ as #CRATE::ParseImpl<#group, ERROR>>::parse_impl(
+            Symbol { typ, group, .. } => {Ok(quote! {{
+                match <#typ as #CRATE::ParseImpl<#group, ERROR>>::parse_impl(
                     // pass 'input' and 'end' as-is
                     input, end,
                     // if it is the head, add 1 to left recursion depth
                     // otherwise, depth should be cleared (since it cannot recurse on the same pos)
-                    if #head { depth + 1 } else { 0 },
+                    if head { depth + 1 } else { 0 },
                     // the stack top can only used as the leftmost token
                     // so the 'first' proposition only holds when it is the head element
-                    first && #head,
+                    head && first,
                     // pass 'trace' and 'stack' as-is
                     trace, stack
-                )
-            })}
+                ) {
+                    Ok(end_) if end_ > end => { head = false; Ok(end_) }
+                    other => other
+                }
+            }})}
             RegExp { regex, refute, .. } => {Ok(quote! {{(|| -> Result<usize, ()> {
                 // if regex is the first token, and the stack top is considered as a token
                 // then certainly this will not match
-                if #head && first { Err(())? }
+                if head && first { Err(())? }
                 // when the prefix matches the regex, 
                 // remove the matched part from input stream and proceed
                 static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
@@ -98,17 +112,18 @@ impl Builder {
                     );
                     if #refute.len() != 0 && REGEX.is_match(&input[start..end]) {
                         Err(())
-                    } else {
+                    }
+                    else {
                         #CRATE::stack_sanity_check(input, stack, start..end);
                         stack.push(#CRATE::Tag { rule: 0, span: start..end });
+                        head = false;
                         Ok::<_, ()>(end)
                     }
                 }
             })()}})}
             SeqExp { children, .. } => {
                 let children = children.iter().map(|(seq, flag)| {
-                    let result = self.rules_vect_build(seq, head)?;
-                    head = false;
+                    let result = self.rules_vect_build(seq)?;
                     match flag {
                         Flag::Repeat => {Ok(quote! {{
                             let start = end;
