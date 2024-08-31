@@ -4,7 +4,7 @@ impl Builder {
     // build the rule trait(s) for the given type
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
-        let r#impl = |num, ident, variant, generics, body, trace| quote! {
+        let r#impl = |num, ident, generics, body| quote! {
             impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
                 fn rule_impl(
                     input: &str, end: usize,        // input[end..] represents the unparsed source
@@ -24,7 +24,7 @@ impl Builder {
         };
         for (num, rule) in self.rules.iter().enumerate() {
             let body = self.rules_vect_build(&rule.exprs, true)?;
-            impls.extend(r#impl(num, &self.ident, &rule.variant, &self.generics, body, rule.trace));
+            impls.extend(r#impl(num, &self.ident, &self.generics, body));
         };
         Ok(impls)
     }
