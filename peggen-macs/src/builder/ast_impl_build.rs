@@ -68,11 +68,20 @@ impl AstImplBuild for Builder {
                 if rule.named { quote! { {#(#argv)*} } }
                 else          { quote! { (#(#argv)*) } }
             };
+            let trace = rule.trace;
             // Return ast and the rest part of the stack
             arms.extend(if self.is_enum {
-                quote! { #num => {#argb; (stack, {Self::#variant #argv})} }
+                quote! { #num => {
+                    if #trace { println!("AST\t{}::{}\t{stack:?}", stringify!(#this), stringify!(#variant)); }
+                    #argb;
+                    (stack, {Self::#variant #argv})
+                } }
             } else {
-                quote! { #num => {#argb; (stack, {Self #argv})} }
+                quote! { #num => {
+                    if #trace { println!("AST\t{}\t{stack:?}", stringify!(#this)); }
+                    #argb;
+                    (stack, {Self #argv})
+                } }
             });
         }
         Ok(quote!{

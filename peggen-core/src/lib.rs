@@ -24,6 +24,7 @@ pub use crate::parser::*;
 pub use crate::fromstr::*;
 pub use crate::span::*;
 
+use core::fmt::Debug;
 // re-exports
 use core::sync::atomic::AtomicUsize;
 pub use regex::Regex;
@@ -32,10 +33,15 @@ pub use once_cell::sync::Lazy as LazyLock;
 pub use alloc::vec::Vec;
 pub use stacker as stacker;
 
-#[derive(Debug)]
 pub struct Tag {
     pub span: core::ops::Range<usize>,
     pub rule: usize,
+}
+
+impl Debug for Tag {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "[{} @ {:?}]", self.rule, self.span)
+    }
 }
 
 pub trait AstImpl<Extra: Copy> {
