@@ -65,7 +65,7 @@ impl AstImplBuild for Builder {
             // Construct the result ast args
             let argv = {
                 argv.reverse();
-                if rule.named { quote! { {#(#argv)*} } } 
+                if rule.named { quote! { {#(#argv)*} } }
                 else          { quote! { (#(#argv)*) } }
             };
             // Return ast and the rest part of the stack

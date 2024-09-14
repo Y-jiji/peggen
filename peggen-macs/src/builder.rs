@@ -26,7 +26,7 @@ impl Rule {
     pub fn new(fields: Fields, ident: Ident, attr: Attribute) -> Result<Rule> {
         let mut rule = Rule {
             group: 0,
-            named: matches!(fields, Fields::Named(..)),
+            named: matches!(fields, Fields::Named(..) | Fields::Unit),
             error: false,
             trace: false,
             exprs: vec![],
