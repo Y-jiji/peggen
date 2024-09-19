@@ -14,6 +14,7 @@ impl Builder {
                     trace: &mut Vec<usize>,         // non-terminal symbols 
                     stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
                 ) -> Result<usize, ()> {
+                    // TODO: enforce a rule to be non-empty
                     if #trace {
                         println!("START\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);
                     }
@@ -25,12 +26,19 @@ impl Builder {
                         }
                         return Err(());
                     };
-                    if #trace {
-                        println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);
+                    if start < end {
+                        if #trace {
+                            println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);
+                        }
+                        #CRATE::stack_sanity_check(input, stack, start..end);
+                        stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
+                        Ok(end)
+                    } else {
+                        while stack.last().map(|tag| tag.span.start > start).unwrap_or(false) {
+                            stack.pop();
+                        }
+                        Err(())
                     }
-                    #CRATE::stack_sanity_check(input, stack, start..end);
-                    stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
-                    Ok(end)
                 }
             }
         };
@@ -111,7 +119,7 @@ impl Builder {
                 });
                 let start = end;
                 let end = start + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
-                // if the matched string matches the refute pattern
+                // check if the matched string matches the refute pattern
                 {
                     static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| 
                         #CRATE::Regex::new(concat!("^(", #refute, ")$")).unwrap()

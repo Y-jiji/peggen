@@ -90,14 +90,17 @@ pub trait Space {
 pub fn stack_sanity_check(input: &str, stack: &[Tag], span: core::ops::Range<usize>) {
     // only check this when it is in debug mode
     #[cfg(debug_assertions)] {
-        let san = stack.last().map(|tag| (tag.span.start >= span.start && tag.span.end <= span.end) || tag.span.end <= span.start).unwrap_or(true);
+        // you can pass the sanity check if the pattern is empty
+        // however, a rule refutes empty strings in general
+        // otherwise, you will a non-terminal symbol that is empty
+        let san = span.start == span.end || stack.last().map(|tag| (tag.span.start >= span.start && tag.span.end <= span.end) || tag.span.end <= span.start).unwrap_or(true);
         if san { return }
         use alloc::string::String;
         let mut s = String::new();
         for tag in stack.iter().rev() {
             use core::fmt::Write;
-            writeln!(&mut s, "{:?}", &input[tag.span.clone()]).unwrap();
+            writeln!(&mut s, "[RULE{}] {:?} @ {:?}", tag.rule, &input[tag.span.clone()], tag.span).unwrap();
         }
-        panic!("failed stack sanity check:\n{}", s.trim());
+        panic!("internal error: incoming span starts earlier than current top, but it doesn't cover current top\nincoming span: {:?} @ {:?}\n{}", &input[span.clone()], span, s.trim());
     }
 }
