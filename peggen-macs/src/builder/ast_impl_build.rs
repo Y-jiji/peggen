@@ -38,24 +38,12 @@ impl AstImplBuild for Builder {
                 // Just an expression. 
                 match expr {
                     // For symbols and lists, call the related 2nd-parser
-                    Fmt::Symbol { arg, typ, .. } | Fmt::SeqExp { arg, typ, .. } => {
+                    Fmt::RegExp { arg, typ, .. } | 
+                    Fmt::Symbol { arg, typ, .. } | 
+                    Fmt::SeqExp { arg, typ, .. } => {
                         let arg = normalize(arg)?;
                         argb.extend(quote! {
                             let (stack, #arg) = <#typ as #CRATE::AstImpl<#with>>::ast(input, stack, with);
-                        });
-                        argv.push(quote! { #arg, });
-                    }
-                    // For regex, just grab the argument
-                    Fmt::RegExp { arg, typ, .. } => {
-                        let arg = normalize(arg)?;
-                        argb.extend(quote! {
-                            let (stack, #arg) = {
-                                let tag = &stack[stack.len()-1];
-                                (
-                                    &stack[..stack.len()-1],
-                                    <#typ as #CRATE::FromStr<#with>>::from_str_with(&input[tag.span.clone()], with)
-                                )
-                            };
                         });
                         argv.push(quote! { #arg, });
                     }

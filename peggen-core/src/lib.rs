@@ -14,7 +14,6 @@ mod parser;
 mod prepend;
 mod ownptr;
 mod tuple;
-mod string;
 mod fromstr;
 mod span;
 

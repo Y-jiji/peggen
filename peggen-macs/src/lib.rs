@@ -98,7 +98,7 @@ pub fn from_str_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
                 extra: Extra
             ) -> (&'a [#CRATE::Tag], Self) {
                 let tag = stack.last().unwrap();
-                (&stack[..stack.len()-1], Self::from_str_with(&input[tag.span.clone()], extra))
+                (&stack[..stack.len()-1], <Self as #CRATE::FromStr<Extra>>::from_str_with(&input[tag.span.clone()], extra))
             }
         }
     }.into()
