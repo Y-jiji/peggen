@@ -48,10 +48,14 @@ pub fn ast_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_derive(PrependAstImpl)]
 pub fn prepend_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = bail!(parse::<DeriveInput>(input));
-    let generics = input.generics.params;
+    let generics = &input.generics.params;
+    let comma = generics.to_token_stream().into_iter().last().map(|x: TokenTree| x.to_string() == ",").unwrap_or(false);
+    let generics = 
+        if !comma && !generics.is_empty() { quote! { #generics, } }
+        else                              { quote! { #generics  } };
     let ident = input.ident;
     quote! {
-        impl<#generics, Extra: Copy> AstImpl<Extra> for #ident<#generics> where
+        impl<#generics Extra: Copy> AstImpl<Extra> for #ident<#generics> where
             Self: Prepend<Extra>,
             <Self as Prepend<Extra>>::Item: AstImpl<Extra>
         {
@@ -69,6 +73,32 @@ pub fn prepend_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                     stack = stack_;
                 }
                 (stack, this)
+            }
+        }
+    }.into()
+}
+
+/// Generate AstImpl trait from Prepend trait
+#[proc_macro_derive(FromStrAstImpl)]
+pub fn from_str_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = bail!(parse::<DeriveInput>(input));
+    let generics = &input.generics.params;
+    let comma = generics.to_token_stream().into_iter().last().map(|x: TokenTree| x.to_string() == ",").unwrap_or(false);
+    let generics = 
+        if !comma && !generics.is_empty() { quote! { #generics, } }
+        else                              { quote! { #generics  } };
+    let ident = input.ident;
+    quote! {
+        impl<#generics Extra: Copy> AstImpl<Extra> for #ident<#generics> where 
+            Self: #CRATE::FromStr<Extra>
+        {
+            fn ast<'a>(
+                input: &'a str, 
+                stack: &'a [#CRATE::Tag], 
+                extra: Extra
+            ) -> (&'a [#CRATE::Tag], Self) {
+                let tag = stack.last().unwrap();
+                (&stack[..stack.len()-1], Self::from_str_with(&input[tag.span.clone()], extra))
             }
         }
     }.into()
