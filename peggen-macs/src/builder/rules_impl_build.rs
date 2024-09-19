@@ -4,40 +4,44 @@ impl Builder {
     // build the rule trait(s) for the given type
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
-        let r#impl = |num, ident, generics, variant, trace, body| quote! {
-            impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
-                #[inline(always)]
-                fn rule_impl(
-                    input: &str, end: usize,        // input[end..] represents the unparsed source
-                    depth: usize,                   // left recursion depth
-                    first: bool,                    // whether stack top is considered a token
-                    trace: &mut Vec<usize>,         // non-terminal symbols 
-                    stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
-                ) -> Result<usize, ()> {
-                    // TODO: enforce a rule to be non-empty
-                    if #trace {
-                        println!("START\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);
-                    }
-                    let start = end;        // this is the starting point of this parsing pass
-                    let mut head = true;    // tracks if it is the first sub-peg (might be modified by sub pegs)
-                    let Ok(end) = (#body) else {
-                        if #trace {
-                            println!("ERR\t{}::{}", stringify!(#ident), stringify!(#variant));
+        let r#impl = |num, ident, generics, variant, trace, body| {
+            let (trace_start, trace_end_ok, trace_end_err) = 
+                if trace { (
+                    quote!{println!("START\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);}, 
+                    quote!{println!("ERR\t{}::{}", stringify!(#ident), stringify!(#variant)); },
+                    quote!{println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);}
+                ) }
+                else { (quote!{}, quote!{}, quote!{}) };
+            quote! {
+                impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
+                    #[inline(always)]
+                    fn rule_impl(
+                        input: &str, end: usize,        // input[end..] represents the unparsed source
+                        depth: usize,                   // left recursion depth
+                        first: bool,                    // whether stack top is considered a token
+                        trace: &mut Vec<usize>,         // non-terminal symbols 
+                        stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
+                    ) -> Result<usize, ()> {
+                        // TODO: enforce a rule to be non-empty
+                        #trace_start
+                        let start = end;        // this is the starting point of this parsing pass
+                        let mut head = true;    // tracks if it is the first sub-peg (might be modified by sub pegs)
+                        let Ok(end) = (#body) else {
+                            #trace_end_err
+                            return Err(());
+                        };
+                        if start < end {
+                            #trace_end_ok
+                            #CRATE::stack_sanity_check(input, stack, start..end);
+                            stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
+                            Ok(end)
+                        } else {
+                            while stack.last().map(|tag| tag.span.start > start).unwrap_or(false) {
+                                stack.pop();
+                            }
+                            #trace_end_err
+                            Err(())
                         }
-                        return Err(());
-                    };
-                    if start < end {
-                        if #trace {
-                            println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);
-                        }
-                        #CRATE::stack_sanity_check(input, stack, start..end);
-                        stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
-                        Ok(end)
-                    } else {
-                        while stack.last().map(|tag| tag.span.start > start).unwrap_or(false) {
-                            stack.pop();
-                        }
-                        Err(())
                     }
                 }
             }
