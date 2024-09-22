@@ -88,18 +88,21 @@ struct BoolAndInt(bool, i64);
 ```
 
 <details open>
-    <summary>Question</summary>
-    What will the following statement print?
-    ```rust
-    println!("{:?}", Parser::<BoolAndInt>::parse("false and 19").unwrap());
-    ```
+<summary>Question</summary>
+
+What will the following statement print?
+```rust
+
+println!("{:?}", Parser::<BoolAndInt>::parse("false and 19").unwrap());
+```
 </details>
 
-<details open>
-    <summary>Answer</summary>
-    ```
-    BoolAndInt(false, 19);
-    ```
+<details>
+<summary>Answer</summary>
+
+```
+BoolAndInt(false, 19);
+```
 </details>
 
 An `enum` is a collection of rules, during parsing, the rules declared in an `enum` is tried one by one until one of them matches. 
@@ -121,31 +124,35 @@ pub enum Json {
 ```
 
 <details open>
-    <summary>Question</summary>
-    * How to parse a string with `"` escaped to `\"`?
-    * For exampe: `"\"a string\""`. 
+<summary>Question</summary>
+
+* How to parse a string with `"` escaped to `\"`?
+* For example: `"\"a string\""`. 
 </details>
 
 <details>
-    <summary>Answer</summary>
-    ```rust
-    #[rule(r#""{0:`([^"]|\\")*`}""#)]
-    Str(String)
-    ```
+<summary>Answer</summary>
+
+```rust
+#[rule(r#""{0:`([^"]|\\")*`}""#)]
+Str(String)
+```
 </details>
 
 <details open>
-    <summary>Question</summary>
-    Given that you can have multiple rules on the same enum variant, what is the alternative way of writing the `Bool(bool)` operation?
+<summary>Question</summary>
+
+Given that you can have multiple rules on the same enum variant, what is the alternative way of writing the `Bool(bool)` operation?
 </details>
 
-<details open>
-    <summary>Answer</summary>
-    ```rust
-    #[rule(r#""{0:`false`}"#)]
-    #[rule(r#""{0:`true`}"#)]
-    Bool(bool)
-    ```
+<details>
+<summary>Answer</summary>
+
+```rust
+#[rule(r#""{0:`false`}"#)]
+#[rule(r#""{0:`true`}"#)]
+Bool(bool)
+```
 </details>
 
 ### Step 2: Repetition
