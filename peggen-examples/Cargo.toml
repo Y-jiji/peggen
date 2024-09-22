@@ -4,7 +4,9 @@ version = "0.2.1"
 edition = "2021"
 
 [dependencies]
+ariadne = "0.4.1"
 bumpalo = { version = "3.16.0", features = ["boxed"] }
+chumsky = { git = "https://github.com/zesterer/chumsky.git", rev = "9031baf", features = ["std"] }
 once_cell = "1.19.0"
 peggen = { version = "0.2", path = "../peggen", features = ["trace"] }
 stacker = "0.1.15"

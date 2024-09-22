@@ -33,11 +33,10 @@ mod test {
 
     #[test]
     fn json_bench() {
-        // 4782390 ns/iter
-        // 867913 ns/iter
+        // 867913 ns/iter: this crate
         let x = std::time::SystemTime::now();
         for i in 0..10000 { json() };
-        println!("{}", x.elapsed().unwrap().as_nanos() / 10000);
+        println!("peggen: {}", x.elapsed().unwrap().as_nanos() / 10000);
     }
 
 }

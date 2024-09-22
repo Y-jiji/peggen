@@ -1,4 +1,4 @@
-# **Peggen**
+# Peggen
 
 A parser generator for parsing expression grammar (PEG) that use inline macros to specify PEG operations. 
 
@@ -10,6 +10,18 @@ A parser generator for parsing expression grammar (PEG) that use inline macros t
 | [Chumsky](https://crates.io/crates/chumsky) | **Chumsky** provides parser combinators. **Peggen** is a parser generator. | Both **Chumsky** and **Peggen** provides ast directly. However, **Peggen** supports arena allocation.  | **Chumsky** deallocates successful sub-rules when a rule fails; **Peggen** uses a internal representation to eliminate deallocation. | / |
 | [LALRPOP](https://lalrpop.github.io/lalrpop) | **Peggen** is PEG-based; **LALRPOP** uses **LR(1)** grammar. | **Peggen** is more intuitive to use than **LALRPOP**; **LR(1)** grammar is hard to extend and debug. | **LALRPOP** has better performance over **Peggen**. | **LR(1)** grammar can report errors far away from normally percepted cause; Peggen allows you to capture errors from customary cause. |
 
+## Performance
+
+I roughly tested the peggen on a sample json file against chumsky. 
+
+CPU Model: Intel(R) Core(TM) i7-14700HX
+
+Suprisingly, Peggen is faster than Chumsky. 
+
+Here are some numbers: 
+- Peggen : 867913 ns/iter
+- Chumsky: 1555256 ns/iter
+
 ## Example: Json Parser
 
 You can write a json parser in the following several lines: 
@@ -17,16 +29,20 @@ You can write a json parser in the following several lines:
 ```rust
 #[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
 pub enum Json {
-    #[rule("{0:`false|true`}")]
+    #[rule(r"null")]
+    Null,
+    #[rule(r"{0:`false|true`}")]
     Bool(bool),
+    #[rule(r"{0:`-?(0|[1-9][0-9]*)\.([0-9]+)`}")]
+    Flt(f32),
     #[rule("{0:`0|-?[1-9][0-9]*`}")]
-    Int(i64),
-    #[rule("\"{0:`[^\"]*`}\"")]
+    Num(i32),
+    #[rule(r#""{0:`[^"]*`}""#)]
     Str(String),
-    #[rule(r"\{ [*0: {0:`[a-zA-Z]+`} : {1} , ][?0: {0:`[a-zA-Z]+`} : {1} ] \}")]
+    #[rule(r#"\{ [*0: "{0:`[^"]*`}" : {1} , ][?0: "{0:`[^"]*`}" : {1} ] \}"#)]
     Obj(RVec<(String, Json)>),
     #[rule(r"\[ [*0: {0} , ][?0: {0} ] \]")]
-    Arr(RVec<Json>),
+    Arr(RVec<Json>)
 }
 ```
 
@@ -35,4 +51,5 @@ pub enum Json {
 - Optimizations: 
   - Rule dispatch: filter rules by the first symbol, instead of trying each of them. 
   - Thinner tag: currently each tag in internal representation is 3-pointers wide, I want to make them thinner. 
-  - 
+- Error Handling: 
+  - Custom error handlers when error handlers fail. 
