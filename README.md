@@ -20,7 +20,7 @@ Suprisingly, Peggen is faster than Chumsky.
 
 Here are some numbers: 
 - Peggen : 867913 ns/iter
-- Chumsky: 1555256 ns/iter
+- Chumsky: 1464737 ns/iter
 
 ## Example: Json Parser
 

@@ -33,33 +33,8 @@ fn parser<'a>() -> impl Parser<'a, &'a str, Json, extra::Err<Rich<'a, char>>> {
             .map(|s: &str| s.parse().unwrap())
             .boxed();
 
-        let escape = just('\\')
-            .then(choice((
-                just('\\'),
-                just('/'),
-                just('"'),
-                just('b').to('\x08'),
-                just('f').to('\x0C'),
-                just('n').to('\n'),
-                just('r').to('\r'),
-                just('t').to('\t'),
-                just('u').ignore_then(text::digits(16).exactly(4).to_slice().validate(
-                    |digits, e, emitter| {
-                        char::from_u32(u32::from_str_radix(digits, 16).unwrap()).unwrap_or_else(
-                            || {
-                                emitter.emit(Rich::custom(e.span(), "invalid unicode character"));
-                                '\u{FFFD}' // unicode replacement character
-                            },
-                        )
-                    },
-                )),
-            )))
+        let string = none_of("\"")
             .ignored()
-            .boxed();
-
-        let string = none_of("\\\"")
-            .ignored()
-            .or(escape)
             .repeated()
             .to_slice()
             .map(ToString::to_string)
