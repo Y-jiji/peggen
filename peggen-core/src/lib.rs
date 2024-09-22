@@ -71,13 +71,14 @@ pub trait RuleImpl<const RULE: usize, const ERROR: bool> {
     ) -> Result<usize, ()>;
 }
 
-pub static PIGEON_COUNT: AtomicUsize = AtomicUsize::new(1);
+pub static PEGGEN_COUNT: AtomicUsize = AtomicUsize::new(1);
 
 pub trait Num {
     fn num(rule: usize) -> usize;
 }
 
 pub trait Space {
+    #[inline(always)]
     fn space(input: &str, end: usize) -> Result<usize, ()> {
         for (delta, ch) in input[end..].char_indices() {
             if !ch.is_whitespace() { return Ok(end+delta) }

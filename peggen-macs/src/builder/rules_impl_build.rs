@@ -7,9 +7,9 @@ impl Builder {
         let r#impl = |num, ident, generics, variant, trace, body| {
             let (trace_start, trace_end_ok, trace_end_err) = 
                 if trace { (
-                    quote!{println!("START\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);}, 
+                    quote!{println!("TRY\t{}::{} @ {end}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);}, 
+                    quote!{println!("OK\t{}::{} @ {start}..{end}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);},
                     quote!{println!("ERR\t{}::{}", stringify!(#ident), stringify!(#variant)); },
-                    quote!{println!("OK\t{}::{}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);}
                 ) }
                 else { (quote!{}, quote!{}, quote!{}) };
             quote! {

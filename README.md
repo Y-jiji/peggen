@@ -1,7 +1,38 @@
-# Pigeon (homonym of peg-gen)
+# **Peggen**
 
-A recursive descent parser generator library that use inlined macros. 
+A parser generator for parsing expression grammar (PEG) that use inline macros to specify PEG operations. 
 
-The current version is a test-beta. But I have some working examples in [peggen-examples](./peggen-examples). 
+## How is it different from (...)?
 
-Need hands for documentation / examples / better error handling. 
+| /    | Conceptual | User Experience | Performance | Error Handling |
+| ---- | ---------- | --------------- | ----------- | -------------- |
+| [PEST](https://pest.rs) | PEST only annotates text. <br> Peggen generates AST directly from your text. | In most cases, you still want rust `enum`s for your AST, which is directly provided by **Peggen**, but you have to manually create `enums` from **PEST** rules. | **PEST** use an optimizer to memorize your grammar rules, and use memorization for better performance; **Peggen** doesn't use memorization, arguably this gives better performance over memorization for most grammars. | / |
+| [Chumsky](https://crates.io/crates/chumsky) | **Chumsky** provides parser combinators. **Peggen** is a parser generator. | Both **Chumsky** and **Peggen** provides ast directly. However, **Peggen** supports arena allocation.  | **Chumsky** deallocates successful sub-rules when a rule fails; **Peggen** uses a internal representation to eliminate deallocation. | / |
+| [LALRPOP](https://lalrpop.github.io/lalrpop) | **Peggen** is PEG-based; **LALRPOP** uses **LR(1)** grammar. | **Peggen** is more intuitive to use than **LALRPOP**; **LR(1)** grammar is hard to extend and debug. | **LALRPOP** has better performance over **Peggen**. | **LR(1)** grammar can report errors far away from normally percepted cause; Peggen allows you to capture errors from customary cause. |
+
+## Example: Json Parser
+
+You can write a json parser in the following several lines: 
+
+```rust
+#[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
+pub enum Json {
+    #[rule("{0:`false|true`}")]
+    Bool(bool),
+    #[rule("{0:`0|-?[1-9][0-9]*`}")]
+    Int(i64),
+    #[rule("\"{0:`[^\"]*`}\"")]
+    Str(String),
+    #[rule(r"\{ [*0: {0:`[a-zA-Z]+`} : {1} , ][?0: {0:`[a-zA-Z]+`} : {1} ] \}")]
+    Obj(RVec<(String, Json)>),
+    #[rule(r"\[ [*0: {0} , ][?0: {0} ] \]")]
+    Arr(RVec<Json>),
+}
+```
+
+## Roadmap
+
+- Optimizations: 
+  - Rule dispatch: filter rules by the first symbol, instead of trying each of them. 
+  - Thinner tag: currently each tag in internal representation is 3-pointers wide, I want to make them thinner. 
+  - 

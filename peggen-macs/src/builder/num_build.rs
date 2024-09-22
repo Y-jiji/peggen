@@ -18,12 +18,12 @@ impl NumBuild for Builder {
                 // Implement rule counting using static trick. 
                 fn num(rule: usize) -> usize {
                     // Use a global counter
-                    use core::sync::atomic::Ordering::SeqCst;
+                    use core::sync::atomic::Ordering::Relaxed;
                     // Here we still use once_cell::sync::Lazy
                     use #CRATE::LazyLock;
                     // A global counter will step, so the rule numbers will be kept unique during a run
                     static DELTA: LazyLock<usize> = 
-                        LazyLock::new(|| #CRATE::PIGEON_COUNT.fetch_add(#count, SeqCst));
+                        LazyLock::new(|| #CRATE::PEGGEN_COUNT.fetch_add(#count, Relaxed));
                     *DELTA + rule
                 }
             }
