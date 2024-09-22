@@ -29,3 +29,13 @@ Impl!(
     A B C D E F, F E D C B A;
     A B C D E F G, G F E D C B A;
 );
+
+impl<Extra: Copy> AstImpl<Extra> for () {
+    fn ast<'a>(
+        _: &'a str, 
+        stack: &'a [Tag], 
+        _: Extra
+    ) -> (&'a [Tag], Self) {
+        (&stack[..stack.len()-1], ())
+    }
+}

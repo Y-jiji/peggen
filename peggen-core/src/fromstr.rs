@@ -16,13 +16,12 @@ macro_rules! Impl {
             fn ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
-                _: Extra
+                extra: Extra
             ) -> (&'a [Tag], Self) {
                 let tag = &stack[stack.len()-1];
                 (
                     &stack[..stack.len()-1],
-                    <Self as core::str::FromStr>::from_str(&input[tag.span.clone()])
-                        .unwrap()
+                    <Self as FromStr<Extra>>::from_str_with(&input[tag.span.clone()], extra)
                 )
             }
         }
