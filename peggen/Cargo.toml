@@ -1,7 +1,7 @@
 [package]
 name = "peggen"
 description = "Generate recursive-descent & precedence climbing parsers. "
-version = "0.2.2"
+version = "0.2.6"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 keywords = ["parser-tools", "parser", "compiler"]

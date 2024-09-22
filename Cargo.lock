@@ -177,7 +177,7 @@ dependencies = [
 
 [[package]]
 name = "peggen"
-version = "0.2.2"
+version = "0.2.6"
 dependencies = [
  "peggen-core",
  "peggen-impl",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "peggen-core"
-version = "0.2.2"
+version = "0.2.6"
 dependencies = [
  "bumpalo",
  "bytemuck",
@@ -201,7 +201,7 @@ dependencies = [
 
 [[package]]
 name = "peggen-examples"
-version = "0.2.1"
+version = "0.2.6"
 dependencies = [
  "ariadne",
  "bumpalo",
@@ -213,7 +213,7 @@ dependencies = [
 
 [[package]]
 name = "peggen-impl"
-version = "0.2.3"
+version = "0.2.6"
 dependencies = [
  "bumpalo",
  "peggen-core",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "peggen-macs"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "once_cell",
  "proc-macro2",
