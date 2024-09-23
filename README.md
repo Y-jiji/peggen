@@ -2,6 +2,18 @@
 
 A parser generator for parsing expression grammar (PEG) that use inline macros to specify PEG operations. 
 
+## Roadmap
+
+Help needed! There is so much to do!
+
+- Optimizations: 
+  - Rule dispatch: filter rules by the first symbol, instead of trying each of them. 
+  - Thinner tag: currently each tag in internal representation is 3-pointers wide, I want to make them thinner. 
+- Error Handling: 
+  - Custom final error handlers when custom error capturing fails. 
+- Documentation: 
+  - Demonstrate features like precedence climbing, error handling, repetition, custom `FromStr`, arean allocation, and left recursion handling. 
+
 ## How is it different from (...)?
 
 | /    | Conceptual | User Experience | Performance & Code Quality | Error Handling |
@@ -158,13 +170,3 @@ Bool(bool)
 ### Step 2: Repetition
 
 TODO
-
-## Roadmap
-
-- Optimizations: 
-  - Rule dispatch: filter rules by the first symbol, instead of trying each of them. 
-  - Thinner tag: currently each tag in internal representation is 3-pointers wide, I want to make them thinner. 
-- Error Handling: 
-  - Custom error handlers when error handlers fail. 
-- Documentation: 
-  - Demonstrate features like precedence climbing, repetition, custom `FromStr`, arean allocation, and left recursion handling. 
