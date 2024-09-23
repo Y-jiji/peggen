@@ -4,7 +4,7 @@ A parser generator for parsing expression grammar (PEG) that use inline macros t
 
 ## Roadmap
 
-Help needed! There is so much to do!
+Help needed! There is so much to do! [Contact Me](mailto:y.jijiji.data.science@gmail.com)
 
 - Optimizations: 
   - Rule dispatch: filter rules by the first symbol, instead of trying each of them. 
