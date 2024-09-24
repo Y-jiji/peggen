@@ -2,6 +2,29 @@
 
 A parser generator for parsing expression grammar (PEG) that use inline macros to specify PEG operations. 
 
+```rust
+use peggen::*;
+
+#[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
+pub enum Json {
+    #[rule(r"null")]
+    Null,
+    #[rule(r"{0:`false|true`}")]
+    Bool(bool),
+    #[rule(r"{0:`-?(0|[1-9][0-9]*)\.([0-9]+)`}")]
+    Flt(f32),
+    #[rule("{0:`0|-?[1-9][0-9]*`}")]
+    Num(i32),
+    #[rule(r#""{0:`[^"]*`}""#)]
+    Str(String),
+}
+
+fn main() {
+    let json = Parser::<Json>::parse("{x: 1, y: 2}").unwrap();
+    println!("{json:?}");
+}
+```
+
 ## Roadmap
 
 Help needed! There is so much to do! [Contact Me](mailto:y.jijiji.data.science@gmail.com)
