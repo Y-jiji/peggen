@@ -2,6 +2,8 @@
 
 A parser generator for parsing expression grammar (PEG) that use inline macros to specify PEG operations. 
 
+This is how it looks like: 
+
 ```rust
 use peggen::*;
 
