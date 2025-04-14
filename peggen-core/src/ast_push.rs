@@ -47,6 +47,7 @@ impl<T: AstImpl<Extra>, Extra: Copy> PushImpl<Extra> for Option<T> {
     }
 }
 
+#[cfg(feature="bumpalo")]
 impl<'b, T: AstImpl<&'b Bump>> PushImpl<&'b Bump> for bumpalo::collections::Vec<'b, T> {
     type Item = T;
     fn empty(with: &'b Bump) -> Self {

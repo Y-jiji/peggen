@@ -39,6 +39,7 @@ macro_rules! Impl {
 
 Impl!(Arc Box Rc);
 
+#[cfg(feature="bumpalo")]
 impl<'a, const GROUP: usize, const ERROR: bool, T> ParseImpl<GROUP, ERROR> for bumpalo::boxed::Box<'a, T> 
     where T: ParseImpl<GROUP, ERROR>
 {
@@ -53,6 +54,7 @@ impl<'a, const GROUP: usize, const ERROR: bool, T> ParseImpl<GROUP, ERROR> for b
     }
 }
 
+#[cfg(feature="bumpalo")]
 impl<'b, T> AstImpl<&'b bumpalo::Bump> for bumpalo::boxed::Box<'b, T> 
     where T: AstImpl<&'b bumpalo::Bump>,
 {
