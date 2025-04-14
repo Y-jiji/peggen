@@ -116,7 +116,7 @@ mod test {
         let src = include_str!("../samples/sample.json");
         let x = std::time::SystemTime::now();
         let p = parser();
-        for i in 0..10000 { p.parse(src).unwrap(); };
+        for i in 0..100 { p.parse(src).unwrap(); };
         println!("chumsky: {}", x.elapsed().unwrap().as_nanos() / 10000);
     }
 

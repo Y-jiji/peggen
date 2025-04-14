@@ -5,14 +5,14 @@ macro_rules! Impl {
         impl<Extra: Copy, $($A, )*> AstImpl<Extra> for ($($A, )*)
             where $($A: AstImpl<Extra>, )*
         {
-            fn ast<'a>(
+            fn peggen_ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
                 with: Extra
             ) -> (&'a [Tag], Self) {
                 $(
                     // Because tag code is suffix coding, we have to parse from tail to head
-                    let (stack, casey::lower!($B)) = $B::ast(input, stack, with);
+                    let (stack, casey::lower!($B)) = $B::peggen_ast(input, stack, with);
                 )*
                 (stack, ($(casey::lower!($A), )*))
             }
@@ -31,7 +31,7 @@ Impl!(
 );
 
 impl<Extra: Copy> AstImpl<Extra> for () {
-    fn ast<'a>(
+    fn peggen_ast<'a>(
         _: &'a str, 
         stack: &'a [Tag], 
         _: Extra

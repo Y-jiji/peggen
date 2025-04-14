@@ -11,17 +11,17 @@
 extern crate alloc;
 
 mod parser;
-mod prepend;
-mod ownptr;
-mod tuple;
-mod fromstr;
-mod span;
+mod ast_push;
+mod ast_ownptr;
+mod ast_tuple;
+mod ast_fromstr;
+mod ast_span;
 
 // re-exports
-pub use crate::prepend::*;
+pub use crate::ast_push::*;
 pub use crate::parser::*;
-pub use crate::fromstr::*;
-pub use crate::span::*;
+pub use crate::ast_fromstr::*;
+pub use crate::ast_span::*;
 
 use core::fmt::Debug;
 // re-exports
@@ -44,7 +44,7 @@ impl Debug for Tag {
 }
 
 pub trait AstImpl<Extra: Copy> {
-    fn ast<'a>(
+    fn peggen_ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
         with: Extra
@@ -77,7 +77,7 @@ pub trait Num {
     fn num(rule: usize) -> usize;
 }
 
-pub trait Space {
+pub trait SkipSpace {
     #[inline(always)]
     fn space(input: &str, end: usize) -> Result<usize, ()> {
         for (delta, ch) in input[end..].char_indices() {
@@ -92,8 +92,7 @@ pub fn stack_sanity_check(input: &str, stack: &[Tag], span: core::ops::Range<usi
     // only check this when it is in debug mode
     #[cfg(debug_assertions)] {
         // you can pass the sanity check if the pattern is empty
-        // however, a rule refutes empty strings in general
-        // otherwise, you will a non-terminal symbol that is empty
+        // however, a rule refutes empty strings in general, or you will get a non-terminal symbol that is empty
         let san = span.start == span.end || stack.last().map(|tag| (tag.span.start >= span.start && tag.span.end <= span.end) || tag.span.end <= span.start).unwrap_or(true);
         if san { return }
         use alloc::string::String;

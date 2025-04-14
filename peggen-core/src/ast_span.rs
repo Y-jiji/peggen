@@ -55,13 +55,13 @@ impl<Extra, T> AstImpl<Extra> for Span<T>
     where T: AstImpl<Extra>,
             Extra: Copy,
 {
-    fn ast<'a>(
+    fn peggen_ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
         with: Extra
     ) -> (&'a [Tag], Self) {
         let range = stack[stack.len()-1].span.clone();
-        let (rest, value) = T::ast(input, stack, with);
+        let (rest, value) = T::peggen_ast(input, stack, with);
         (rest, Span { value, range })
     }
 }

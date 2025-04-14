@@ -13,7 +13,7 @@ macro_rules! Impl {
             }
         }
         impl<Extra: Copy> AstImpl<Extra> for $T {
-            fn ast<'a>(
+            fn peggen_ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
                 extra: Extra
@@ -42,7 +42,7 @@ impl<'b> FromStr<&'b bumpalo::Bump> for bumpalo::collections::String<'b> {
 }
 
 impl<'b> AstImpl<&'b bumpalo::Bump> for bumpalo::collections::String<'b> {
-    fn ast<'a>(
+    fn peggen_ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
         extra: &'b bumpalo::Bump,

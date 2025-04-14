@@ -25,7 +25,7 @@ impl AstImplBuild for Builder {
             let variant = &rule.variant;
             let mut argb = TokenStream::new();
             let mut argv = Vec::new();
-            // Generate code for converting part of the tags into ast and remove them from stack. 
+            // Generate code for converting part of the tags into peggen_ast and remove them from stack. 
             // At the same time, collect typ constraints s.t. AstImpl<#with> is implemented for each usage. 
             // Ast is suffix encoded, so the 2nd-parser have to parse from tail to head. 
             for expr in rule.exprs.iter().rev() {
@@ -39,25 +39,31 @@ impl AstImplBuild for Builder {
                 match expr {
                     // For symbols and lists, call the related 2nd-parser
                     Fmt::RegExp { arg, typ, .. } | 
-                    Fmt::Symbol { arg, typ, .. } | 
+                    Fmt::Symbol { arg, typ, .. } => {
+                        let arg = normalize(arg)?;
+                        argb.extend(quote! {
+                            let (stack, #arg) = <#typ as AstImpl<#with>>::peggen_ast(input, stack, with);
+                        });
+                        argv.push(quote! { #arg, });
+                    }
                     Fmt::SeqExp { arg, typ, .. } => {
                         let arg = normalize(arg)?;
                         argb.extend(quote! {
-                            let (stack, #arg) = <#typ as #CRATE::AstImpl<#with>>::ast(input, stack, with);
+                            let (stack, #arg) = <#typ as PushImpl<#with>>::peggen_ast(input, stack, with);
                         });
                         argv.push(quote! { #arg, });
                     }
                     _ => {}
                 }
             }
-            // Construct the result ast args
+            // Construct the result peggen_ast args
             let argv = {
                 argv.reverse();
                 if rule.named { quote! { {#(#argv)*} } }
                 else          { quote! { (#(#argv)*) } }
             };
             let trace = rule.trace;
-            // Return ast and the rest part of the stack
+            // Return peggen_ast and the rest part of the stack
             arms.extend(if self.is_enum {
                 let trace = 
                     if trace { quote!{ println!("AST\t{}::{}\t{stack:?}", stringify!(#this), stringify!(#variant)); } }
@@ -80,7 +86,7 @@ impl AstImplBuild for Builder {
         }
         Ok(quote!{
             impl<#front> #CRATE::AstImpl<#with> for #this<#generics> {
-                fn ast<'lifetime>(
+                fn peggen_ast<'lifetime>(
                     input: &'lifetime str, 
                     stack: &'lifetime [#CRATE::Tag], 
                     with: #with

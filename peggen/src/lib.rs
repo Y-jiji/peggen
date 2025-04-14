@@ -8,4 +8,3 @@ extern crate alloc;
 
 pub use peggen_core::*;
 pub use peggen_macs::*;
-pub use peggen_impl::*;

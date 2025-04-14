@@ -16,7 +16,7 @@ impl<T> Parser<T> {
         let end = 0;
         <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
         // Analyze the tag stack into this value
-        Ok(T::ast(input, &stack, ()).1)
+        Ok(T::peggen_ast(input, &stack, ()).1)
     }
     /// Parse with extra value provided
     pub fn parse_with<Extra>(input: &str, with: Extra) -> Result<T, ()> 
@@ -29,7 +29,7 @@ impl<T> Parser<T> {
         let end = 0;
         <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
         // Analyze the tag stack into this value, with extra value attached
-        Ok(T::ast(input, &stack, with).1)
+        Ok(T::peggen_ast(input, &stack, with).1)
     }
     /// Only parse into a tag stack
     pub fn sequence(input: &str) -> Result<Vec<Tag>, ()> 

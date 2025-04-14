@@ -1,8 +1,7 @@
 use std::fmt::Debug;
 use peggen::*;
 
-
-#[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
+#[derive(Debug, Parse, SkipSpace)]
 pub enum Json {
     #[rule(r"null")]
     Null,
@@ -15,9 +14,9 @@ pub enum Json {
     #[rule(r#""{0:`[^"]*`}""#)]
     Str(String),
     #[rule(r#"\{ [*0: "{0:`[^"]*`}" : {1} , ][?0: "{0:`[^"]*`}" : {1} ] \}"#)]
-    Obj(RVec<(String, Json)>),
+    Obj(Vec<(String, Json)>),
     #[rule(r"\[ [*0: {0} , ][?0: {0} ] \]")]
-    Arr(RVec<Json>)
+    Arr(Vec<Json>)
 }
 
 #[cfg(test)]
@@ -35,7 +34,7 @@ mod test {
     fn json_bench() {
         // 867913 ns/iter: this crate
         let x = std::time::SystemTime::now();
-        for i in 0..10000 { json() };
+        for i in 0..100 { json() };
         println!("peggen: {}", x.elapsed().unwrap().as_nanos() / 10000);
     }
 

@@ -2,7 +2,7 @@ use crate::*;
 use bumpalo::boxed::Box as BBox;
 use bumpalo::collections::String as BString;
 
-#[derive(Debug, ParseImpl, Space, Num, EnumAstImpl)]
+#[derive(Debug, ParseImpl, SkipSpace, Num, EnumAstImpl)]
 #[with(&'a bumpalo::Bump)]
 pub enum Expr<'a> {
     #[rule("{0:0} + {1:1}", group=0)]
@@ -28,7 +28,7 @@ mod test {
     #[test]
     fn expr() {
         let bump = Bump::new();
-        let expr = Parser::<Expr>::parse_with("1 + 2 * a + 4", &bump).unwrap();
+        let expr = Parser::<Expr>::parse_with("1 + 2 * a - 4", &bump).unwrap();
         println!("{expr:?}");
     }
 }

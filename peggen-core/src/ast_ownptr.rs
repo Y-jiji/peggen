@@ -25,12 +25,12 @@ macro_rules! Impl {
             where T: AstImpl<Extra>,
                   Extra: Copy,
         {
-            fn ast<'a>(
+            fn peggen_ast<'a>(
                 input: &'a str, 
                 stack: &'a [Tag], 
                 with: Extra
             ) -> (&'a [Tag], Self) {
-                let (rest, this) = T::ast(input, stack, with);
+                let (rest, this) = T::peggen_ast(input, stack, with);
                 (rest, $T::new(this))
             }
         }
@@ -56,12 +56,12 @@ impl<'a, const GROUP: usize, const ERROR: bool, T> ParseImpl<GROUP, ERROR> for b
 impl<'b, T> AstImpl<&'b bumpalo::Bump> for bumpalo::boxed::Box<'b, T> 
     where T: AstImpl<&'b bumpalo::Bump>,
 {
-    fn ast<'a>(
+    fn peggen_ast<'a>(
         input: &'a str, 
         stack: &'a [Tag], 
         with: &'b bumpalo::Bump
     ) -> (&'a [Tag], Self) {
-        let (rest, this) = T::ast(input, stack, with);
+        let (rest, this) = T::peggen_ast(input, stack, with);
         (rest, bumpalo::boxed::Box::new_in(this, with))
     }
 }
