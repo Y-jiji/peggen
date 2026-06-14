@@ -12,6 +12,18 @@ fn is_infix_rule(rule: &Rule) -> bool {
     }
 }
 
+fn body_references_tag(expr: &RuleExpr, tag_name: &str) -> bool {
+    match expr {
+        RuleExpr::FieldTag(_, tag) => tag == tag_name,
+        RuleExpr::Seq(elems) => elems.iter().any(|e| body_references_tag(e, tag_name)),
+        RuleExpr::Choice(a, b) => body_references_tag(a, tag_name) || body_references_tag(b, tag_name),
+        RuleExpr::Rep(e, _) => body_references_tag(e, tag_name),
+        RuleExpr::SepRep { expr, sep, .. } => body_references_tag(expr, tag_name) || body_references_tag(sep, tag_name),
+        RuleExpr::Not(e) | RuleExpr::And(e) => body_references_tag(e, tag_name),
+        _ => false,
+    }
+}
+
 fn infix_left_tag(rule: &Rule) -> Option<&str> {
     match &rule.body {
         RuleExpr::Seq(elems) if !elems.is_empty() => {
@@ -40,7 +52,7 @@ impl Builder {
         let ident = &self.ident;
         let generics = &self.generics;
 
-        let build_impl = |group: usize, initial_body: TokenStream, loop_body: Option<TokenStream>, patt: TokenStream| {
+        let build_impl = |group: usize, initial_body: TokenStream, loop_body: Option<TokenStream>, patt: TokenStream, needs_guard: bool| {
             let loop_code = match &loop_body {
                 Some(lb) => quote! {
                     let first = true;
@@ -51,6 +63,15 @@ impl Builder {
                 },
                 None => quote! {},
             };
+            let has_loop = loop_body.is_some();
+            let guard_push = if needs_guard { quote! {
+                for &node in &ctx.trace[ctx.trace.len().max(depth)-depth..] {
+                    if node == symb + #group { Err(())? }
+                }
+                ctx.trace.push(symb + #group);
+            }} else { quote! {} };
+            let guard_pop = if needs_guard { quote! { ctx.trace.pop(); } } else { quote! {} };
+            let start_bind = if has_loop { quote! { let start = end; } } else { quote! {} };
             quote! {
                 impl<#generics const ERROR: bool> #parse_trait<#group, ERROR> for #ident<#generics> {
                     fn #parse_method(
@@ -63,13 +84,10 @@ impl Builder {
                         if first && ctx.tags.last().map(|tag| tag.rule >= symb && matches!(tag.rule - symb, #patt)).unwrap_or(false) {
                             return Ok(ctx.tags.last().map(|tag| tag.span.end).unwrap());
                         }
-                        for &node in &ctx.trace[ctx.trace.len().max(depth)-depth..] {
-                            if node == symb + #group { Err(())? }
-                        }
-                        ctx.trace.push(symb + #group);
-                        let start = end;
+                        #guard_push
+                        #start_bind
                         let end = #initial_body;
-                        ctx.trace.pop();
+                        #guard_pop
                         let mut end = end?;
                         #loop_code
                         Ok(end)
@@ -86,17 +104,20 @@ impl Builder {
                     self.parse_impl_group_legacy(group, mode)?
                 };
                 let patt = self.parse_patt_group_legacy(group)?;
-                impls.extend(build_impl(group, body.clone(), Some(body), patt));
+                impls.extend(build_impl(group, body.clone(), Some(body), patt, true));
             }
         } else {
-            for (tag_idx, _tag_name) in self.all_tags.iter().enumerate() {
+            for (tag_idx, tag_name) in self.all_tags.iter().enumerate() {
                 let patt = self.parse_patt_group_tagged(tag_idx)?;
+                let needs_guard = self.rules.iter()
+                    .filter(|rule| rule.tags.contains(tag_name))
+                    .any(|rule| body_references_tag(&rule.body, tag_name));
                 if mode.optimized {
                     let (initial_body, loop_body) = self.parse_impl_group_tagged_split(tag_idx, mode)?;
-                    impls.extend(build_impl(tag_idx, initial_body, loop_body, patt));
+                    impls.extend(build_impl(tag_idx, initial_body, loop_body, patt, needs_guard));
                 } else {
                     let body = self.parse_impl_group_tagged(tag_idx, mode)?;
-                    impls.extend(build_impl(tag_idx, body.clone(), Some(body), patt));
+                    impls.extend(build_impl(tag_idx, body.clone(), Some(body), patt, needs_guard));
                 }
             }
         }

@@ -66,14 +66,32 @@ impl Builder {
         let parse_trait = &mode.parse_trait;
         let parse_method = &mode.parse_method;
         match expr {
-            RuleExpr::Literal(s) => Ok(quote! {{
-                if head && first { Err(()) }
-                else if input[end..].starts_with(#s) {
-                    head &= #s.len() == 0;
-                    Ok::<_, ()>(end + #s.len())
+            RuleExpr::Literal(s) => {
+                if s.is_empty() {
+                    Ok(quote! { Ok::<usize, ()>(end) })
+                } else if s.len() == 1 {
+                    let byte = s.as_bytes()[0];
+                    Ok(quote! {{
+                        if head && first { Err(()) }
+                        else if end < input.len() && input.as_bytes()[end] == #byte {
+                            head = false;
+                            Ok::<_, ()>(end + 1)
+                        }
+                        else { Err(()) }
+                    }})
+                } else {
+                    let bytes = proc_macro2::Literal::byte_string(s.as_bytes());
+                    let len = s.len();
+                    Ok(quote! {{
+                        if head && first { Err(()) }
+                        else if end + #len <= input.len() && &input.as_bytes()[end..end + #len] == #bytes {
+                            head = false;
+                            Ok::<_, ()>(end + #len)
+                        }
+                        else { Err(()) }
+                    }})
                 }
-                else { Err(()) }
-            }}),
+            },
 
             RuleExpr::Field(fref) => {
                 let key = fref.key();
