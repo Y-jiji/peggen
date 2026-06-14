@@ -48,4 +48,25 @@ impl<T: PeggenTypeStub> Parser<T> {
         <<T as PeggenTypeStub>::Reflect<'a> as RefParseImpl<0, false>>::ref_parse_impl(input, 0, 0, false, &mut self.ctx)?;
         Ok(<T as PeggenTypeStub>::Reflect::<'a>::peggen_ast(input, &self.ctx.tags, with).1)
     }
+
+    pub fn fused_parse<'a>(&mut self, input: &str) -> Result<<T as PeggenTypeStub>::Reflect<'a>, ()>
+    where <T as PeggenTypeStub>::Reflect<'a>: FusedParseImpl<0, false, ()>
+    {
+        self.ctx.clear();
+        let (_, value) = <<T as PeggenTypeStub>::Reflect<'a> as FusedParseImpl<0, false, ()>>::fused_parse_impl(
+            input, 0, 0, false, &mut self.ctx, ()
+        )?;
+        Ok(value)
+    }
+
+    pub fn fused_parse_with<'a, Extra>(&mut self, input: &str, with: Extra) -> Result<<T as PeggenTypeStub>::Reflect<'a>, ()>
+    where <T as PeggenTypeStub>::Reflect<'a>: FusedParseImpl<0, false, Extra>,
+          Extra: Copy
+    {
+        self.ctx.clear();
+        let (_, value) = <<T as PeggenTypeStub>::Reflect<'a> as FusedParseImpl<0, false, Extra>>::fused_parse_impl(
+            input, 0, 0, false, &mut self.ctx, with
+        )?;
+        Ok(value)
+    }
 }

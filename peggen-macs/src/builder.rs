@@ -12,6 +12,8 @@ mod num_build;
 mod rules_impl_build;
 mod parse_impl_build;
 mod first_set;
+pub(crate) mod bracket_analysis;
+mod fused_build;
 pub use ast_impl_build::*;
 pub use num_build::*;
 pub(crate) use first_set::*;

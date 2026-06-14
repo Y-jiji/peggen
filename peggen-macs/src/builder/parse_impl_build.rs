@@ -403,7 +403,7 @@ impl Builder {
     }
 }
 
-fn compress_byte_ranges(bytes: &[u8]) -> Vec<TokenStream> {
+pub(crate) fn compress_byte_ranges(bytes: &[u8]) -> Vec<TokenStream> {
     if bytes.is_empty() { return vec![]; }
     let mut patterns = Vec::new();
     let mut i = 0;

@@ -487,7 +487,7 @@ enum InlineQuantifier {
     OneOrMore,
 }
 
-fn try_inline_regex(pattern: &str) -> Option<TokenStream> {
+pub(crate) fn try_inline_regex(pattern: &str) -> Option<TokenStream> {
     let (chars, negated, quantifier) = parse_simple_pattern(pattern)?;
     let match_arms = generate_byte_match_arms(&chars, negated);
 

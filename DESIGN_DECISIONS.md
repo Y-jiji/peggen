@@ -6,12 +6,13 @@
 
 | Optimization | Document | Status |
 |---|---|---|
-| Predictive dispatch | PREDICTIVE_DISPATCH.md | Designed |
-| Dyck bracket pairing | DYCK_LANGUAGE.md | Designed |
-| Eager eviction | EAGER_EVICTION.md | Designed |
+| Predictive dispatch | PREDICTIVE_DISPATCH.md | Implemented |
+| Dyck bracket pairing | DYCK_LANGUAGE.md | Implemented |
+| Eager eviction (fused parsing) | EAGER_EVICTION.md | Implemented |
+| Tag-State Machine (Pratt parsing) | (inline discussion) | Implemented |
 | Memo ring buffer | (inline discussion) | Designed |
 | SIMD structural scan | (inline discussion) | Designed |
-| Fuzz testing | FUZZ_TESTING.md | Designed |
+| Fuzz testing | FUZZ_TESTING.md | Implemented |
 
 ### Decisions
 
@@ -47,26 +48,19 @@ Objects (`String`, `Vec<Json>`, `Box<Expr>`, etc.) involve heap allocation. Cons
 | Speculative (before commit) | Pushed freely, discarded on backtrack | Never constructed |
 | Committed (after commit point) | Consumed and evicted | Constructed from consumed tags |
 
-### Current Problem
+### Implementation: Fused Parsing (Eager Eviction)
 
-The current two-phase design defers ALL object construction to after the full parse. This is safe (no speculative construction), but the AST construction phase must reverse-traverse the entire tag stack via O(n) recursion (the `rev` function in `PushImpl`). This causes:
+The fused parsing path (`fused_parse`) merges parsing and AST construction into a single pass via `FusedParseImpl` and `FusedRuleImpl` traits. No tag stack is used — objects are constructed inline as the parser commits.
 
-- O(n) tag storage (proportional to input, not nesting depth)
-- O(n) call stack depth during AST construction
-- Dependence on `stacker` to avoid stack overflow on large inputs
+Three techniques maintain the invariant while minimizing probe overhead:
 
-### The Fix: Eager Eviction
+**1. Atomicity analysis.** An expression is "fused-atomic" if calling its fused code and having it fail cannot leave any constructed objects behind. Single `Field`/`FieldTag` expressions delegate to a child type's `FusedParseImpl` which maintains the invariant internally. Single `FieldRegex` with a pure regex is an atomic match+construct — if the regex fails, no object. Atomic expressions skip external probes entirely.
 
-At each commit point, consume the tags for the committed region and construct the objects immediately. Then evict the consumed tags. The tag stack stays bounded by speculative depth (typically small), not input size.
+**2. Probe-then-construct.** For non-atomic expressions at speculative points (Choice branches, Rep/SepRep loop items, overlapping FIRST set dispatch groups), a position-only probe runs first via `ParseImpl::parse_impl` or `fused_pos_only_code`. Construction via `FusedRuleImpl` only proceeds after the probe confirms success. Memo cache entries from probes speed up subsequent fused construction.
 
-In committed repetitions, this turns the recursive `rev` traversal into a flat loop:
+**3. Deferred construction in sequences.** When a Seq contains `FieldRegex` with pure regex (e.g., `"\"" $0:str "\"" _ ":" _ $1`), the regex match advances position but defers `FromStr` construction to after the entire sequence succeeds. This makes the Seq fused-atomic — no object exists during the speculative window between the regex match and the final element.
 
-```
-// Before (deferred): parse all → tag stack of N elements → rev(N) with O(N) recursion
-// After (eager): for each element, parse → construct → push into Vec → evict tags
-```
-
-Elements are constructed in natural left-to-right order and appended directly. No reversal, no recursion.
+Generated for all grammars. Non-tagged grammars use direct fused dispatch. Tagged grammars with linear tag chains (e.g., `add ⊃ mul ⊃ atom`) use the Tag-State Machine (Pratt parsing) variant, which replaces bounded-depth left recursion with a flat O(n) infix loop per precedence level.
 
 ### What Qualifies as a Commit Point
 

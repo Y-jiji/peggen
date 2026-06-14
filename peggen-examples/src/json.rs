@@ -59,6 +59,24 @@ mod test {
         println!("peggen ref: {}", x.elapsed().unwrap().as_nanos() / 10000);
     }
 
+    #[test]
+    fn json_fused() {
+        let json_str = include_str!("../samples/sample.json");
+        let mut parser = Parser::<Json>::new();
+        let _json: Json = parser.fused_parse(json_str).unwrap();
+    }
+
+    #[test]
+    fn json_bench_fused() {
+        let x = std::time::SystemTime::now();
+        let mut parser = Parser::<Json>::new();
+        let json_str = include_str!("../samples/sample.json");
+        for _ in 0..100 {
+            let _: Json = parser.fused_parse(json_str).unwrap();
+        }
+        println!("peggen fused: {}", x.elapsed().unwrap().as_nanos() / 10000);
+    }
+
     fn gen_json(rng: &mut impl rand::Rng, depth: usize) -> String {
         if depth > 6 {
             return match rng.gen_range(0..4) {
@@ -187,6 +205,36 @@ mod test {
             let reff = parser.ref_parse(&input);
             assert_eq!(opt.is_ok(), reff.is_ok(),
                 "differential divergence on: {input:?}");
+        }
+    }
+
+    #[test]
+    fn fuzz_json_fused_differential_valid() {
+        use rand::{Rng, SeedableRng};
+        let mut rng = rand::rngs::StdRng::seed_from_u64(700);
+        let mut parser = Parser::<Json>::new();
+        for i in 0..10_000 {
+            let input = gen_json(&mut rng, 0);
+            let opt = parser.parse(&input);
+            let fused: Result<Json, ()> = parser.fused_parse(&input);
+            assert_eq!(opt.is_ok(), fused.is_ok(),
+                "fused differential divergence on iteration {i}, input: {input:?}");
+        }
+    }
+
+    #[test]
+    fn fuzz_json_fused_differential_garbage() {
+        use rand::{Rng, SeedableRng};
+        let mut rng = rand::rngs::StdRng::seed_from_u64(800);
+        let mut parser = Parser::<Json>::new();
+        for _ in 0..10_000 {
+            let len = rng.gen_range(0..64);
+            let bytes: Vec<u8> = (0..len).map(|_| rng.gen_range(0x20..0x7f)).collect();
+            let input = String::from_utf8(bytes).unwrap();
+            let opt = parser.parse(&input);
+            let fused: Result<Json, ()> = parser.fused_parse(&input);
+            assert_eq!(opt.is_ok(), fused.is_ok(),
+                "fused differential divergence on: {input:?}");
         }
     }
 }

@@ -82,6 +82,34 @@ pub trait RefRuleImpl<const RULE: usize, const ERROR: bool> {
     ) -> Result<usize, ()>;
 }
 
+pub trait FusedParseImpl<const GROUP: usize, const ERROR: bool, Extra: Copy>: Sized {
+    fn fused_parse_impl(
+        input: &str, end: usize,
+        depth: usize,
+        first: bool,
+        ctx: &mut ParseContext,
+        extra: Extra,
+    ) -> Result<(usize, Self), ()>;
+}
+
+pub trait FusedRuleImpl<const RULE: usize, const ERROR: bool, Extra: Copy>: Sized {
+    fn fused_rule_impl(
+        input: &str, end: usize,
+        depth: usize,
+        first: bool,
+        ctx: &mut ParseContext,
+        extra: Extra,
+    ) -> Result<(usize, Self), ()>;
+}
+
+pub trait FusedWrap<T, Extra: Copy> {
+    fn fused_wrap(val: T, extra: Extra) -> Self;
+}
+
+pub trait BracketPairs {
+    fn bracket_pairs() -> &'static [(&'static str, &'static str)];
+}
+
 pub static PEGGEN_COUNT: AtomicUsize = AtomicUsize::new(1);
 
 pub trait Num {

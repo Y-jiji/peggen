@@ -40,6 +40,9 @@ pub fn parse_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     output.extend(bail!(builder.ast_impl_build()));
     output.extend(bail!(builder.num_build()));
     output.extend(bail!(builder.type_stub_build()));
+    output.extend(bail!(builder.bracket_pairs_build()));
+    output.extend(bail!(builder.fused_parse_impl_build()));
+    output.extend(bail!(builder.fused_rules_impl_build()));
     output.into()
 }
 
@@ -53,6 +56,9 @@ pub fn parse_impl_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     output.extend(bail!(builder.ref_parse_impl_build()));
     output.extend(bail!(builder.ref_rules_impl_build()));
     output.extend(bail!(builder.type_stub_build()));
+    output.extend(bail!(builder.bracket_pairs_build()));
+    output.extend(bail!(builder.fused_parse_impl_build()));
+    output.extend(bail!(builder.fused_rules_impl_build()));
     output.into()
 }
 

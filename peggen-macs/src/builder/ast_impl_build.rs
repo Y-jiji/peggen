@@ -5,7 +5,7 @@ pub trait AstImplBuild {
     fn ast_impl_build(&self) -> Result<TokenStream>;
 }
 
-enum FieldKind {
+pub(crate) enum FieldKind {
     Value,
     Collection,
 }
