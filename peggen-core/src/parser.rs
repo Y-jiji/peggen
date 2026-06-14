@@ -2,43 +2,50 @@ use core::marker::PhantomData;
 
 use crate::*;
 
-/// A simple wrapper to make ParseImpl easier to use. 
-pub struct Parser<T>(PhantomData<T>);
+pub struct Parser<T: PeggenTypeStub> {
+    ctx: ParseContext,
+    _phantom: PhantomData<fn() -> T>,
+}
 
-impl<T> Parser<T> {
-    /// Parse without extra value
-    pub fn parse(input: &str) -> Result<T, ()> 
-        where T: ParseImpl<0, false> + AstImpl<()>
-    {
-        // Parse input input a tag stack
-        let mut trace = Vec::new();
-        let mut stack = Vec::new();
-        let end = 0;
-        <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
-        // Analyze the tag stack into this value
-        Ok(T::peggen_ast(input, &stack, ()).1)
+impl<T: PeggenTypeStub> Parser<T> {
+    pub fn new() -> Self {
+        Self {
+            ctx: ParseContext::new(),
+            _phantom: PhantomData,
+        }
     }
-    /// Parse with extra value provided
-    pub fn parse_with<Extra>(input: &str, with: Extra) -> Result<T, ()> 
-        where T: ParseImpl<0, false> + AstImpl<Extra>,
-              Extra: Copy
+
+    pub fn parse<'a>(&mut self, input: &str) -> Result<<T as PeggenTypeStub>::Reflect<'a>, ()>
+    where <T as PeggenTypeStub>::Reflect<'a>: ParseImpl<0, false> + AstImpl<()>
     {
-        // Parse input input a tag stack
-        let mut trace = Vec::new();
-        let mut stack = Vec::new();
-        let end = 0;
-        <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
-        // Analyze the tag stack into this value, with extra value attached
-        Ok(T::peggen_ast(input, &stack, with).1)
+        self.ctx.clear();
+        <<T as PeggenTypeStub>::Reflect<'a> as ParseImpl<0, false>>::parse_impl(input, 0, 0, false, &mut self.ctx)?;
+        Ok(<T as PeggenTypeStub>::Reflect::<'a>::peggen_ast(input, &self.ctx.tags, ()).1)
     }
-    /// Only parse into a tag stack
-    pub fn sequence(input: &str) -> Result<Vec<Tag>, ()> 
-        where T: ParseImpl<0, false> + AstImpl<()>
+
+    pub fn parse_with<'a, Extra>(&mut self, input: &str, with: Extra) -> Result<<T as PeggenTypeStub>::Reflect<'a>, ()>
+    where <T as PeggenTypeStub>::Reflect<'a>: ParseImpl<0, false> + AstImpl<Extra>,
+          Extra: Copy
     {
-        let mut trace = Vec::new();
-        let mut stack = Vec::new();
-        let end = 0;
-        <T as ParseImpl<0, false>>::parse_impl(input, end, 0, false, &mut trace, &mut stack)?;
-        Ok(stack)
+        self.ctx.clear();
+        <<T as PeggenTypeStub>::Reflect<'a> as ParseImpl<0, false>>::parse_impl(input, 0, 0, false, &mut self.ctx)?;
+        Ok(<T as PeggenTypeStub>::Reflect::<'a>::peggen_ast(input, &self.ctx.tags, with).1)
+    }
+
+    pub fn ref_parse<'a>(&mut self, input: &str) -> Result<<T as PeggenTypeStub>::Reflect<'a>, ()>
+    where <T as PeggenTypeStub>::Reflect<'a>: RefParseImpl<0, false> + AstImpl<()>
+    {
+        self.ctx.clear();
+        <<T as PeggenTypeStub>::Reflect<'a> as RefParseImpl<0, false>>::ref_parse_impl(input, 0, 0, false, &mut self.ctx)?;
+        Ok(<T as PeggenTypeStub>::Reflect::<'a>::peggen_ast(input, &self.ctx.tags, ()).1)
+    }
+
+    pub fn ref_parse_with<'a, Extra>(&mut self, input: &str, with: Extra) -> Result<<T as PeggenTypeStub>::Reflect<'a>, ()>
+    where <T as PeggenTypeStub>::Reflect<'a>: RefParseImpl<0, false> + AstImpl<Extra>,
+          Extra: Copy
+    {
+        self.ctx.clear();
+        <<T as PeggenTypeStub>::Reflect<'a> as RefParseImpl<0, false>>::ref_parse_impl(input, 0, 0, false, &mut self.ctx)?;
+        Ok(<T as PeggenTypeStub>::Reflect::<'a>::peggen_ast(input, &self.ctx.tags, with).1)
     }
 }

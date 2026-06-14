@@ -4,7 +4,17 @@ use crate::rule_ast::*;
 
 impl Builder {
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
+        self.rules_impl_build_with(&ImplMode::normal())
+    }
+
+    pub fn ref_rules_impl_build(&self) -> Result<TokenStream> {
+        self.rules_impl_build_with(&ImplMode::reference())
+    }
+
+    fn rules_impl_build_with(&self, mode: &ImplMode) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
+        let rule_trait = &mode.rule_trait;
+        let rule_method = &mode.rule_method;
         let r#impl = |num, ident, generics, variant, trace, body| {
             let (trace_start, trace_end_ok, trace_end_err) =
                 if trace { (
@@ -14,14 +24,13 @@ impl Builder {
                 ) }
                 else { (quote!{}, quote!{}, quote!{}) };
             quote! {
-                impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
+                impl<#generics const ERROR: bool> #rule_trait<#num, ERROR> for #ident<#generics> {
                     #[inline(always)]
-                    fn rule_impl(
+                    fn #rule_method(
                         input: &str, end: usize,
                         depth: usize,
                         first: bool,
-                        trace: &mut Vec<usize>,
-                        stack: &mut Vec<#CRATE::Tag>,
+                        ctx: &mut #CRATE::ParseContext,
                     ) -> Result<usize, ()> {
                         #trace_start
                         let start = end;
@@ -32,12 +41,12 @@ impl Builder {
                         };
                         if start < end {
                             #trace_end_ok
-                            #CRATE::stack_sanity_check(input, stack, start..end);
-                            stack.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
+                            #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                            ctx.tags.push(#CRATE::Tag { rule: <Self as Num>::num(#num), span: start..end });
                             Ok(end)
                         } else {
-                            while stack.last().map(|tag| tag.span.start > start).unwrap_or(false) {
-                                stack.pop();
+                            while ctx.tags.last().map(|tag| tag.span.start > start).unwrap_or(false) {
+                                ctx.tags.pop();
                             }
                             #trace_end_err
                             Err(())
@@ -47,13 +56,15 @@ impl Builder {
             }
         };
         for (num, rule) in self.rules.iter().enumerate() {
-            let body = self.rules_expr_build(&rule.body, &rule.fields)?;
+            let body = self.rules_expr_build(&rule.body, &rule.fields, mode)?;
             impls.extend(r#impl(num, &self.ident, &self.generics, &rule.variant, rule.trace, body));
         };
         Ok(impls)
     }
 
-    fn rules_expr_build(&self, expr: &RuleExpr, fields: &HashMap<String, Type>) -> Result<TokenStream> {
+    fn rules_expr_build(&self, expr: &RuleExpr, fields: &HashMap<String, Type>, mode: &ImplMode) -> Result<TokenStream> {
+        let parse_trait = &mode.parse_trait;
+        let parse_method = &mode.parse_method;
         match expr {
             RuleExpr::Literal(s) => Ok(quote! {{
                 if head && first { Err(()) }
@@ -70,11 +81,11 @@ impl Builder {
                     .ok_or_else(|| Error::new(proc_macro2::Span::call_site(),
                         format!("unknown field '{}' in rule for '{}'", key, self.ident)))?;
                 Ok(quote! {{
-                    match <#typ as #CRATE::ParseImpl<0, ERROR>>::parse_impl(
+                    match <#typ as #parse_trait<0, ERROR>>::#parse_method(
                         input, end,
                         if head { depth + 1 } else { 0 },
                         head && first,
-                        trace, stack
+                        ctx
                     ) {
                         Ok(end_) if end_ > end => { head = false; Ok(end_) }
                         other => other
@@ -89,11 +100,11 @@ impl Builder {
                         format!("unknown field '{}' in rule for '{}'", key, self.ident)))?;
                 let group = self.tag_index(tag)?;
                 Ok(quote! {{
-                    match <#typ as #CRATE::ParseImpl<#group, ERROR>>::parse_impl(
+                    match <#typ as #parse_trait<#group, ERROR>>::#parse_method(
                         input, end,
                         if head { depth + 1 } else { 0 },
                         head && first,
-                        trace, stack
+                        ctx
                     ) {
                         Ok(end_) if end_ > end => { head = false; Ok(end_) }
                         other => other
@@ -108,7 +119,7 @@ impl Builder {
                         .ok_or_else(|| Error::new(proc_macro2::Span::call_site(),
                             format!("unknown field '{}' in rule for '{}'", key, self.ident)))?;
                     let sub_fields = crate::builder::build_item_fields(typ);
-                    self.rules_expr_build(&sub_expr, &sub_fields)
+                    self.rules_expr_build(&sub_expr, &sub_fields, mode)
                 } else if let Some(regex_pattern) = self.context.regexes.get(name).cloned() {
                     Ok(quote! {{(|| -> Result<usize, ()> {
                         if head && first { Err(())? }
@@ -117,8 +128,8 @@ impl Builder {
                         });
                         let start = end;
                         let end = start + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
-                        #CRATE::stack_sanity_check(input, stack, start..end);
-                        stack.push(#CRATE::Tag { rule: 0, span: start..end });
+                        #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                        ctx.tags.push(#CRATE::Tag { rule: 0, span: start..end });
                         head = false;
                         Ok::<_, ()>(end)
                     })()}})
@@ -133,7 +144,7 @@ impl Builder {
                     .ok_or_else(|| Error::new(proc_macro2::Span::call_site(),
                         format!("${{...}}:{name} requires a subrule, not a regex; declare with #[subrule({name} = ...)]")))?;
                 let remapped = crate::builder::remap_subrule_fields(sub_expr, frefs);
-                self.rules_expr_build(&remapped, fields)
+                self.rules_expr_build(&remapped, fields, mode)
             }
 
             RuleExpr::SubruleRef(name) => {
@@ -142,7 +153,7 @@ impl Builder {
                         return Err(Error::new(proc_macro2::Span::call_site(),
                             format!("subrule '{name}' has field captures ($0, $1, ...); use $field:{name} to capture or ${{f1,f2}}:{name} to unpack")));
                     }
-                    self.rules_expr_build(&sub_expr, fields)
+                    self.rules_expr_build(&sub_expr, fields, mode)
                 } else if let Some(regex_pattern) = self.context.regexes.get(name).cloned() {
                     Ok(quote! {{(|| -> Result<usize, ()> {
                         if head && first { Err(())? }
@@ -161,12 +172,12 @@ impl Builder {
 
             RuleExpr::Seq(elems) => {
                 let parts = elems.iter()
-                    .map(|elem| self.rules_expr_build(elem, fields))
+                    .map(|elem| self.rules_expr_build(elem, fields, mode))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(quote! {{(|| -> Result<usize, ()> {
-                    let size = stack.len();
+                    let size = ctx.tags.len();
                     #(let Ok(end) = (#parts) else {
-                        stack.resize_with(size, || unreachable!());
+                        ctx.tags.resize_with(size, || unreachable!());
                         Err(())?
                     };)*
                     Ok::<_, ()>(end)
@@ -174,14 +185,14 @@ impl Builder {
             }
 
             RuleExpr::Choice(a, b) => {
-                let code_a = self.rules_expr_build(a, fields)?;
-                let code_b = self.rules_expr_build(b, fields)?;
+                let code_a = self.rules_expr_build(a, fields, mode)?;
+                let code_b = self.rules_expr_build(b, fields, mode)?;
                 Ok(quote! {{(|| -> Result<usize, ()> {
-                    let size = stack.len();
+                    let size = ctx.tags.len();
                     match (#code_a) {
                         Ok(end) => Ok(end),
                         Err(()) => {
-                            stack.resize_with(size, || unreachable!());
+                            ctx.tags.resize_with(size, || unreachable!());
                             #code_b
                         }
                     }
@@ -194,9 +205,9 @@ impl Builder {
                 if has_fields {
                     let resolved = crate::builder::resolve_rep_fields(&expanded, fields);
                     let sub_fields = resolved.as_ref().map(|(_, f)| f).unwrap_or(fields);
-                    self.rules_collection_rep_build(&expanded, *kind, sub_fields)
+                    self.rules_collection_rep_build(&expanded, *kind, sub_fields, mode)
                 } else {
-                    self.rules_simple_rep_build(&expanded, *kind, fields)
+                    self.rules_simple_rep_build(&expanded, *kind, fields, mode)
                 }
             }
 
@@ -206,18 +217,18 @@ impl Builder {
                 if has_fields {
                     let resolved = crate::builder::resolve_rep_fields(&expanded, fields);
                     let sub_fields = resolved.as_ref().map(|(_, f)| f).unwrap_or(fields);
-                    self.rules_sep_rep_build(&expanded, sep, *at_least_one, sub_fields)
+                    self.rules_sep_rep_build(&expanded, sep, *at_least_one, sub_fields, mode)
                 } else {
-                    self.rules_sep_rep_build(&expanded, sep, *at_least_one, fields)
+                    self.rules_sep_rep_build(&expanded, sep, *at_least_one, fields, mode)
                 }
             }
 
             RuleExpr::Not(inner) => {
-                let code = self.rules_expr_build(inner, fields)?;
+                let code = self.rules_expr_build(inner, fields, mode)?;
                 Ok(quote! {{
-                    let saved = stack.len();
+                    let saved = ctx.tags.len();
                     let result = #code;
-                    stack.truncate(saved);
+                    ctx.tags.truncate(saved);
                     match result {
                         Ok(_) => Err(()),
                         Err(()) => Ok::<_, ()>(end),
@@ -226,11 +237,11 @@ impl Builder {
             }
 
             RuleExpr::And(inner) => {
-                let code = self.rules_expr_build(inner, fields)?;
+                let code = self.rules_expr_build(inner, fields, mode)?;
                 Ok(quote! {{
-                    let saved = stack.len();
+                    let saved = ctx.tags.len();
                     let result = #code;
-                    stack.truncate(saved);
+                    ctx.tags.truncate(saved);
                     match result {
                         Ok(_) => Ok::<_, ()>(end),
                         Err(()) => Err(()),
@@ -240,8 +251,8 @@ impl Builder {
         }
     }
 
-    fn rules_simple_rep_build(&self, inner: &RuleExpr, kind: RepKind, fields: &HashMap<String, Type>) -> Result<TokenStream> {
-        let inner_code = self.rules_expr_build(inner, fields)?;
+    fn rules_simple_rep_build(&self, inner: &RuleExpr, kind: RepKind, fields: &HashMap<String, Type>, mode: &ImplMode) -> Result<TokenStream> {
+        let inner_code = self.rules_expr_build(inner, fields, mode)?;
         match kind {
             RepKind::ZeroOrMore => Ok(quote! {{
                 let mut end = end;
@@ -252,7 +263,7 @@ impl Builder {
                 Ok::<_, ()>(end)
             }}),
             RepKind::OneOrMore => {
-                let inner_code2 = self.rules_expr_build(inner, fields)?;
+                let inner_code2 = self.rules_expr_build(inner, fields, mode)?;
                 Ok(quote! {{(|| -> Result<usize, ()> {
                     let Ok(mut end) = (#inner_code) else { Err(())? };
                     while let Ok(end_) = (#inner_code2) {
@@ -271,11 +282,11 @@ impl Builder {
         }
     }
 
-    fn rules_collection_rep_build(&self, inner: &RuleExpr, kind: RepKind, fields: &HashMap<String, Type>) -> Result<TokenStream> {
-        let inner_code = self.rules_expr_build(inner, fields)?;
+    fn rules_collection_rep_build(&self, inner: &RuleExpr, kind: RepKind, fields: &HashMap<String, Type>, mode: &ImplMode) -> Result<TokenStream> {
+        let inner_code = self.rules_expr_build(inner, fields, mode)?;
         match kind {
             RepKind::ZeroOrMore => Ok(quote! {{(|| -> Result<usize, ()> {
-                let size = stack.len();
+                let size = ctx.tags.len();
                 let mut cnt = 0usize;
                 let start = end;
                 let mut end = end;
@@ -284,18 +295,18 @@ impl Builder {
                     end = end_;
                     cnt += 1;
                 }
-                #CRATE::stack_sanity_check(input, stack, start..end);
-                stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                ctx.tags.push(#CRATE::Tag { rule: cnt, span: start..end });
                 Ok::<_, ()>(end)
             })()}}),
             RepKind::OneOrMore => {
-                let inner_code2 = self.rules_expr_build(inner, fields)?;
+                let inner_code2 = self.rules_expr_build(inner, fields, mode)?;
                 Ok(quote! {{(|| -> Result<usize, ()> {
-                    let size = stack.len();
+                    let size = ctx.tags.len();
                     let mut cnt = 0usize;
                     let start = end;
                     let Ok(mut end) = (#inner_code) else {
-                        stack.resize_with(size, || unreachable!());
+                        ctx.tags.resize_with(size, || unreachable!());
                         Err(())?
                     };
                     cnt += 1;
@@ -304,66 +315,66 @@ impl Builder {
                         end = end_;
                         cnt += 1;
                     }
-                    #CRATE::stack_sanity_check(input, stack, start..end);
-                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                    #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                    ctx.tags.push(#CRATE::Tag { rule: cnt, span: start..end });
                     Ok::<_, ()>(end)
                 })()}})
             }
             RepKind::Optional => {
                 Ok(quote! {{(|| -> Result<usize, ()> {
-                    let size = stack.len();
+                    let size = ctx.tags.len();
                     let mut cnt = 0usize;
                     let start = end;
                     let end = match (#inner_code) {
                         Ok(end) => { cnt = 1; end }
-                        Err(()) => { stack.resize_with(size, || unreachable!()); end }
+                        Err(()) => { ctx.tags.resize_with(size, || unreachable!()); end }
                     };
-                    #CRATE::stack_sanity_check(input, stack, start..end);
-                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                    #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                    ctx.tags.push(#CRATE::Tag { rule: cnt, span: start..end });
                     Ok::<_, ()>(end)
                 })()}})
             }
         }
     }
 
-    fn rules_sep_rep_build(&self, expr: &RuleExpr, sep: &RuleExpr, at_least_one: bool, fields: &HashMap<String, Type>) -> Result<TokenStream> {
+    fn rules_sep_rep_build(&self, expr: &RuleExpr, sep: &RuleExpr, at_least_one: bool, fields: &HashMap<String, Type>, mode: &ImplMode) -> Result<TokenStream> {
         let has_fields = expr.has_field_refs();
-        let item_code = self.rules_expr_build(expr, fields)?;
-        let item_code2 = self.rules_expr_build(expr, fields)?;
-        let sep_code = self.rules_expr_build(sep, fields)?;
+        let item_code = self.rules_expr_build(expr, fields, mode)?;
+        let item_code2 = self.rules_expr_build(expr, fields, mode)?;
+        let sep_code = self.rules_expr_build(sep, fields, mode)?;
 
         if has_fields {
             if at_least_one {
                 Ok(quote! {{(|| -> Result<usize, ()> {
-                    let size = stack.len();
+                    let size = ctx.tags.len();
                     let mut cnt = 0usize;
                     let start = end;
                     let Ok(mut end) = (#item_code) else {
-                        stack.resize_with(size, || unreachable!());
+                        ctx.tags.resize_with(size, || unreachable!());
                         Err(())?
                     };
                     cnt += 1;
                     loop {
                         let saved_end = end;
-                        let saved_stack = stack.len();
+                        let saved_stack = ctx.tags.len();
                         let Ok(end_sep) = ((|| -> Result<usize, ()> { let end = end; #sep_code })()) else {
                             break;
                         };
                         match ((|| -> Result<usize, ()> { let end = end_sep; #item_code2 })()) {
                             Ok(end_) if end_ > saved_end => { end = end_; cnt += 1; }
                             _ => {
-                                stack.resize_with(saved_stack, || unreachable!());
+                                ctx.tags.resize_with(saved_stack, || unreachable!());
                                 break;
                             }
                         }
                     }
-                    #CRATE::stack_sanity_check(input, stack, start..end);
-                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                    #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                    ctx.tags.push(#CRATE::Tag { rule: cnt, span: start..end });
                     Ok::<_, ()>(end)
                 })()}})
             } else {
                 Ok(quote! {{(|| -> Result<usize, ()> {
-                    let size = stack.len();
+                    let size = ctx.tags.len();
                     let mut cnt = 0usize;
                     let start = end;
                     let mut end = end;
@@ -372,21 +383,21 @@ impl Builder {
                         cnt += 1;
                         loop {
                             let saved_end = end;
-                            let saved_stack = stack.len();
+                            let saved_stack = ctx.tags.len();
                             let Ok(end_sep) = ((|| -> Result<usize, ()> { let end = end; #sep_code })()) else {
                                 break;
                             };
                             match ((|| -> Result<usize, ()> { let end = end_sep; #item_code2 })()) {
                                 Ok(end_) if end_ > saved_end => { end = end_; cnt += 1; }
                                 _ => {
-                                    stack.resize_with(saved_stack, || unreachable!());
+                                    ctx.tags.resize_with(saved_stack, || unreachable!());
                                     break;
                                 }
                             }
                         }
                     }
-                    #CRATE::stack_sanity_check(input, stack, start..end);
-                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                    #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                    ctx.tags.push(#CRATE::Tag { rule: cnt, span: start..end });
                     Ok::<_, ()>(end)
                 })()}})
             }

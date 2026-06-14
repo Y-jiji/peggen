@@ -430,6 +430,7 @@ dependencies = [
  "chumsky",
  "once_cell",
  "peggen",
+ "rand",
  "stacker",
 ]
 

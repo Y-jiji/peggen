@@ -37,17 +37,29 @@ impl<X> Deref for Span<X> {
     }
 }
 
-impl<const GROUP: usize, const ERROR: bool, T> ParseImpl<GROUP, ERROR> for Span<T> 
+impl<const GROUP: usize, const ERROR: bool, T> ParseImpl<GROUP, ERROR> for Span<T>
     where T: ParseImpl<GROUP, ERROR>
 {
     fn parse_impl(
         input: &str, end: usize,
         depth: usize,
         first: bool,
-        trace: &mut Vec<usize>,
-        stack: &mut Vec<Tag>,
+        ctx: &mut ParseContext,
     ) -> Result<usize, ()> {
-        <T as ParseImpl<GROUP, ERROR>>::parse_impl(input, end, depth, first, trace, stack)
+        <T as ParseImpl<GROUP, ERROR>>::parse_impl(input, end, depth, first, ctx)
+    }
+}
+
+impl<const GROUP: usize, const ERROR: bool, T> RefParseImpl<GROUP, ERROR> for Span<T>
+    where T: RefParseImpl<GROUP, ERROR>
+{
+    fn ref_parse_impl(
+        input: &str, end: usize,
+        depth: usize,
+        first: bool,
+        ctx: &mut ParseContext,
+    ) -> Result<usize, ()> {
+        <T as RefParseImpl<GROUP, ERROR>>::ref_parse_impl(input, end, depth, first, ctx)
     }
 }
 

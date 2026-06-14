@@ -1,15 +1,11 @@
 //! # [`peggen-core`]
-//! 
-//! ## Two-phase Parsing w/o Memorization
-//! In most PEG-based approaches, the target type is constructed during parsing. 
-//! However, some of them might be discarded in the near future, causing unwanted allocation/deallocation. 
-//! In this crate, we seperate parsing and type construction into two phases. 
-//! In the first phase, syntax items are represented as tags, which are storage-agnostic. 
-//! Then, an analysis pass run over the tags and generate a final result. 
+//!
+//! PEG parser runtime with stateful, reusable `Parser<T>`.
 
 #![no_std]
 extern crate alloc;
 
+mod context;
 mod parser;
 mod ast_push;
 mod ast_ownptr;
@@ -17,14 +13,13 @@ mod ast_tuple;
 mod ast_fromstr;
 mod ast_span;
 
-// re-exports
+pub use crate::context::*;
 pub use crate::ast_push::*;
 pub use crate::parser::*;
 pub use crate::ast_fromstr::*;
 pub use crate::ast_span::*;
 
 use core::fmt::Debug;
-// re-exports
 use core::sync::atomic::AtomicUsize;
 pub use regex::Regex;
 pub use once_cell::unsync::Lazy as LazyCell;
@@ -45,29 +40,45 @@ impl Debug for Tag {
 
 pub trait AstImpl<Extra: Copy> {
     fn peggen_ast<'a>(
-        input: &'a str, 
-        stack: &'a [Tag], 
+        input: &'a str,
+        stack: &'a [Tag],
         with: Extra
     ) -> (&'a [Tag], Self);
 }
 
 pub trait ParseImpl<const GROUP: usize, const ERROR: bool> {
     fn parse_impl(
-        input: &str, end: usize,    // input[end..] represents the unparsed source
-        depth: usize,               // left recursion depth
-        first: bool,                // whether stack top is considered a token
-        trace: &mut Vec<usize>,     // non-terminal symbols 
-        stack: &mut Vec<Tag>,       // stack size
+        input: &str, end: usize,
+        depth: usize,
+        first: bool,
+        ctx: &mut ParseContext,
     ) -> Result<usize, ()>;
 }
 
 pub trait RuleImpl<const RULE: usize, const ERROR: bool> {
     fn rule_impl(
-        input: &str, end: usize,    // input[end..] represents the unparsed source
-        depth: usize,               // left recursion depth
-        first: bool,                // whether stack top is considered a token
-        trace: &mut Vec<usize>,     // non-terminal symbols 
-        stack: &mut Vec<Tag>,       // stack size
+        input: &str, end: usize,
+        depth: usize,
+        first: bool,
+        ctx: &mut ParseContext,
+    ) -> Result<usize, ()>;
+}
+
+pub trait RefParseImpl<const GROUP: usize, const ERROR: bool> {
+    fn ref_parse_impl(
+        input: &str, end: usize,
+        depth: usize,
+        first: bool,
+        ctx: &mut ParseContext,
+    ) -> Result<usize, ()>;
+}
+
+pub trait RefRuleImpl<const RULE: usize, const ERROR: bool> {
+    fn ref_rule_impl(
+        input: &str, end: usize,
+        depth: usize,
+        first: bool,
+        ctx: &mut ParseContext,
     ) -> Result<usize, ()>;
 }
 
@@ -75,6 +86,10 @@ pub static PEGGEN_COUNT: AtomicUsize = AtomicUsize::new(1);
 
 pub trait Num {
     fn num(rule: usize) -> usize;
+}
+
+pub trait PeggenTypeStub {
+    type Reflect<'a>;
 }
 
 #[inline(always)]

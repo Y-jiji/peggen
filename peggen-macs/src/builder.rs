@@ -11,8 +11,39 @@ mod ast_impl_build;
 mod num_build;
 mod rules_impl_build;
 mod parse_impl_build;
+mod first_set;
 pub use ast_impl_build::*;
 pub use num_build::*;
+pub(crate) use first_set::*;
+
+pub(crate) struct ImplMode {
+    pub parse_trait: TokenStream,
+    pub parse_method: TokenStream,
+    pub rule_trait: TokenStream,
+    pub rule_method: TokenStream,
+    pub optimized: bool,
+}
+
+impl ImplMode {
+    pub fn normal() -> Self {
+        ImplMode {
+            parse_trait: quote! { #CRATE::ParseImpl },
+            parse_method: quote! { parse_impl },
+            rule_trait: quote! { #CRATE::RuleImpl },
+            rule_method: quote! { rule_impl },
+            optimized: true,
+        }
+    }
+    pub fn reference() -> Self {
+        ImplMode {
+            parse_trait: quote! { #CRATE::RefParseImpl },
+            parse_method: quote! { ref_parse_impl },
+            rule_trait: quote! { #CRATE::RefRuleImpl },
+            rule_method: quote! { ref_rule_impl },
+            optimized: false,
+        }
+    }
+}
 
 pub(crate) struct Rule {
     pub group: usize,
@@ -202,6 +233,36 @@ impl Builder {
         } else {
             self.all_tags.len() - 1
         }
+    }
+}
+
+impl Builder {
+    pub fn type_stub_build(&self) -> Result<TokenStream> {
+        let this = &self.ident;
+        let generics = &self.generics;
+        let has_lifetimes = generics.iter().any(|p| matches!(p, GenericParam::Lifetime(_)));
+
+        if !has_lifetimes {
+            return Ok(quote! {
+                impl<#generics> #CRATE::PeggenTypeStub for #this<#generics> {
+                    type Reflect<'__peggen_a> = Self;
+                }
+            });
+        }
+
+        let reflect_args: Vec<TokenStream> = generics.iter().filter_map(|p| {
+            match p {
+                GenericParam::Lifetime(_) => Some(quote! { '__peggen_a }),
+                GenericParam::Type(tp) => { let id = &tp.ident; Some(quote! { #id }) },
+                GenericParam::Const(cp) => { let id = &cp.ident; Some(quote! { #id }) },
+            }
+        }).collect();
+
+        Ok(quote! {
+            impl<#generics> #CRATE::PeggenTypeStub for #this<#generics> {
+                type Reflect<'__peggen_a> = #this<#(#reflect_args),*>;
+            }
+        })
     }
 }
 
