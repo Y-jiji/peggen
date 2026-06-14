@@ -1,0 +1,33 @@
+[package]
+name = "peggen-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+peggen = { path = "../peggen" }
+
+[dev-dependencies]
+rand = "0.8"
+
+[[bin]]
+name = "fuzz_json"
+path = "fuzz_targets/fuzz_json.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_expr"
+path = "fuzz_targets/fuzz_expr.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_ty"
+path = "fuzz_targets/fuzz_ty.rs"
+doc = false
+
+[workspace]
+members = ["."]

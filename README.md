@@ -30,7 +30,8 @@ pub enum Json {
 }
 
 fn main() {
-    let json = Parser::<Json>::parse(r#"{"x": 1, "y": [2, 3]}"#).unwrap();
+    let mut parser = Parser::<Json>::new();
+    let json = parser.parse(r#"{"x": 1, "y": [2, 3]}"#).unwrap();
     println!("{json:?}");
 }
 ```
