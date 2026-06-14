@@ -121,18 +121,30 @@ impl Builder {
                     let sub_fields = crate::builder::build_item_fields(typ);
                     self.rules_expr_build(&sub_expr, &sub_fields, mode)
                 } else if let Some(regex_pattern) = self.context.regexes.get(name).cloned() {
-                    Ok(quote! {{(|| -> Result<usize, ()> {
-                        if head && first { Err(())? }
-                        static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
-                            #CRATE::Regex::new(concat!("^(", #regex_pattern, ")")).unwrap()
-                        });
-                        let start = end;
-                        let end = start + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
-                        #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
-                        ctx.tags.push(#CRATE::Tag { rule: 0, span: start..end });
-                        head = false;
-                        Ok::<_, ()>(end)
-                    })()}})
+                    if let Some(inline) = try_inline_regex(&regex_pattern) {
+                        Ok(quote! {{(|| -> Result<usize, ()> {
+                            if head && first { Err(())? }
+                            let start = end;
+                            let end = (#inline)?;
+                            #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                            ctx.tags.push(#CRATE::Tag { rule: 0, span: start..end });
+                            head = false;
+                            Ok::<_, ()>(end)
+                        })()}})
+                    } else {
+                        Ok(quote! {{(|| -> Result<usize, ()> {
+                            if head && first { Err(())? }
+                            static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
+                                #CRATE::Regex::new(concat!("^(", #regex_pattern, ")")).unwrap()
+                            });
+                            let start = end;
+                            let end = start + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
+                            #CRATE::stack_sanity_check(input, &ctx.tags, start..end);
+                            ctx.tags.push(#CRATE::Tag { rule: 0, span: start..end });
+                            head = false;
+                            Ok::<_, ()>(end)
+                        })()}})
+                    }
                 } else {
                     Err(Error::new(proc_macro2::Span::call_site(),
                         format!("unknown regex or subrule '{name}', declare with #[regex({name} = r\"...\")] or #[subrule({name} = ...)]")))
@@ -155,15 +167,24 @@ impl Builder {
                     }
                     self.rules_expr_build(&sub_expr, fields, mode)
                 } else if let Some(regex_pattern) = self.context.regexes.get(name).cloned() {
-                    Ok(quote! {{(|| -> Result<usize, ()> {
-                        if head && first { Err(())? }
-                        static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
-                            #CRATE::Regex::new(concat!("^(", #regex_pattern, ")")).unwrap()
-                        });
-                        let end = end + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
-                        head = false;
-                        Ok::<_, ()>(end)
-                    })()}})
+                    if let Some(inline) = try_inline_regex(&regex_pattern) {
+                        Ok(quote! {{(|| -> Result<usize, ()> {
+                            if head && first { Err(())? }
+                            let end = (#inline)?;
+                            head = false;
+                            Ok::<_, ()>(end)
+                        })()}})
+                    } else {
+                        Ok(quote! {{(|| -> Result<usize, ()> {
+                            if head && first { Err(())? }
+                            static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
+                                #CRATE::Regex::new(concat!("^(", #regex_pattern, ")")).unwrap()
+                            });
+                            let end = end + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
+                            head = false;
+                            Ok::<_, ()>(end)
+                        })()}})
+                    }
                 } else {
                     Err(Error::new(proc_macro2::Span::call_site(),
                         format!("unknown subrule or regex '{name}', declare with #[subrule({name} = ...)] or #[regex({name} = r\"...\")]")))
@@ -439,4 +460,137 @@ impl Builder {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum InlineQuantifier {
+    ExactlyOne,
+    ZeroOrMore,
+    OneOrMore,
+}
+
+fn try_inline_regex(pattern: &str) -> Option<TokenStream> {
+    let (chars, negated, quantifier) = parse_simple_pattern(pattern)?;
+    let match_arms = generate_byte_match_arms(&chars, negated);
+
+    match quantifier {
+        InlineQuantifier::ExactlyOne => Some(quote! {
+            if end < input.len() && matches!(input.as_bytes()[end], #match_arms) {
+                Ok::<usize, ()>(end + 1)
+            } else {
+                Err(())
+            }
+        }),
+        InlineQuantifier::ZeroOrMore => Some(quote! {{
+            let mut __pos = end;
+            let __bytes = input.as_bytes();
+            while __pos < __bytes.len() && matches!(__bytes[__pos], #match_arms) {
+                __pos += 1;
+            }
+            Ok::<usize, ()>(__pos)
+        }}),
+        InlineQuantifier::OneOrMore => Some(quote! {{
+            let __bytes = input.as_bytes();
+            if end < __bytes.len() && matches!(__bytes[end], #match_arms) {
+                let mut __pos = end + 1;
+                while __pos < __bytes.len() && matches!(__bytes[__pos], #match_arms) {
+                    __pos += 1;
+                }
+                Ok::<usize, ()>(__pos)
+            } else {
+                Err(())
+            }
+        }}),
+    }
+}
+
+fn parse_simple_pattern(pattern: &str) -> Option<(Vec<u8>, bool, InlineQuantifier)> {
+    let bytes = pattern.as_bytes();
+
+    if bytes.starts_with(b"\\s") {
+        let ws = vec![b' ', b'\t', b'\n', b'\r', 0x0b, 0x0c];
+        match &bytes[2..] {
+            b"*" => return Some((ws, false, InlineQuantifier::ZeroOrMore)),
+            b"+" => return Some((ws, false, InlineQuantifier::OneOrMore)),
+            b"" => return Some((ws, false, InlineQuantifier::ExactlyOne)),
+            _ => return None,
+        }
+    }
+
+    if bytes.first() != Some(&b'[') { return None; }
+    let close = bytes.iter().rposition(|&b| b == b']')?;
+    let rest = &bytes[close + 1..];
+    let quantifier = match rest {
+        b"*" => InlineQuantifier::ZeroOrMore,
+        b"+" => InlineQuantifier::OneOrMore,
+        b"" => InlineQuantifier::ExactlyOne,
+        _ => return None,
+    };
+
+    let mut i = 1;
+    let negated = i < close && bytes[i] == b'^';
+    if negated { i += 1; }
+
+    let mut chars = Vec::new();
+    while i < close {
+        if bytes[i] == b'\\' {
+            i += 1;
+            if i >= close { return None; }
+            match bytes[i] {
+                b'd' => chars.extend(b'0'..=b'9'),
+                b'w' => {
+                    chars.extend(b'0'..=b'9');
+                    chars.extend(b'a'..=b'z');
+                    chars.extend(b'A'..=b'Z');
+                    chars.push(b'_');
+                }
+                b's' => chars.extend(&[b' ', b'\t', b'\n', b'\r']),
+                ch => chars.push(ch),
+            }
+            i += 1;
+        } else if i + 2 < close && bytes[i + 1] == b'-' {
+            for ch in bytes[i]..=bytes[i + 2] { chars.push(ch); }
+            i += 3;
+        } else {
+            chars.push(bytes[i]);
+            i += 1;
+        }
+    }
+
+    if chars.is_empty() && !negated { return None; }
+    Some((chars, negated, quantifier))
+}
+
+fn generate_byte_match_arms(chars: &[u8], negated: bool) -> TokenStream {
+    let target = if negated {
+        (0u8..=127).filter(|b| !chars.contains(b)).collect::<Vec<_>>()
+    } else {
+        chars.to_vec()
+    };
+    let patterns = compress_inline_ranges(&target);
+    quote! { #(#patterns)|* }
+}
+
+fn compress_inline_ranges(bytes: &[u8]) -> Vec<TokenStream> {
+    if bytes.is_empty() { return vec![quote! { 0 if false }]; }
+    let mut sorted = bytes.to_vec();
+    sorted.sort();
+    sorted.dedup();
+    let mut patterns = Vec::new();
+    let mut i = 0;
+    while i < sorted.len() {
+        let start = sorted[i];
+        let mut end = start;
+        while i + 1 < sorted.len() && sorted[i + 1] == end + 1 {
+            end = sorted[i + 1];
+            i += 1;
+        }
+        if start == end {
+            patterns.push(quote! { #start });
+        } else {
+            patterns.push(quote! { #start..=#end });
+        }
+        i += 1;
+    }
+    patterns
 }
