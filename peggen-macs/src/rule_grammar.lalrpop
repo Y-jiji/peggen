@@ -1,0 +1,81 @@
+use crate::rule_ast::{RuleExpr, FieldRef, RepKind};
+use crate::rule_lexer::{RuleTok, LexError};
+
+grammar;
+
+extern {
+    type Location = usize;
+    type Error = LexError;
+
+    enum RuleTok {
+        "lit" => RuleTok::Lit(<String>),
+        "ident" => RuleTok::Ident(<String>),
+        "num" => RuleTok::Num(<usize>),
+        "$" => RuleTok::Dollar,
+        ":" => RuleTok::Colon,
+        "@" => RuleTok::At,
+        "*" => RuleTok::Star,
+        "+" => RuleTok::Plus,
+        "?" => RuleTok::Question,
+        "%" => RuleTok::Percent,
+        "|" => RuleTok::Pipe,
+        "!" => RuleTok::Bang,
+        "&" => RuleTok::Ampersand,
+        "(" => RuleTok::LParen,
+        ")" => RuleTok::RParen,
+        "multifield" => RuleTok::MultiField(<Vec<FieldRef>>),
+    }
+}
+
+pub Rule: RuleExpr = {
+    <Choice>,
+};
+
+Choice: RuleExpr = {
+    <l:Choice> "|" <r:Seq> => RuleExpr::Choice(Box::new(l), Box::new(r)),
+    <Seq>,
+};
+
+Seq: RuleExpr = {
+    <mut elems:Prefix+> => {
+        if elems.len() == 1 {
+            elems.pop().unwrap()
+        } else {
+            RuleExpr::Seq(elems)
+        }
+    },
+};
+
+Prefix: RuleExpr = {
+    "!" <s:Suffix> => RuleExpr::Not(Box::new(s)),
+    "&" <s:Suffix> => RuleExpr::And(Box::new(s)),
+    <Suffix>,
+};
+
+Suffix: RuleExpr = {
+    <p:Primary> "*" "%" <sep:Primary> => RuleExpr::SepRep {
+        expr: Box::new(p), sep: Box::new(sep), at_least_one: false,
+    },
+    <p:Primary> "+" "%" <sep:Primary> => RuleExpr::SepRep {
+        expr: Box::new(p), sep: Box::new(sep), at_least_one: true,
+    },
+    <p:Primary> "*" => RuleExpr::Rep(Box::new(p), RepKind::ZeroOrMore),
+    <p:Primary> "+" => RuleExpr::Rep(Box::new(p), RepKind::OneOrMore),
+    <p:Primary> "?" => RuleExpr::Rep(Box::new(p), RepKind::Optional),
+    <Primary>,
+};
+
+Primary: RuleExpr = {
+    "lit" => RuleExpr::Literal(<>),
+    "$" <f:Field> ":" <n:"ident"> => RuleExpr::FieldRegex(f, n),
+    "$" <f:Field> "@" <t:"ident"> => RuleExpr::FieldTag(f, t),
+    "$" <f:Field> => RuleExpr::Field(f),
+    <fields:"multifield"> ":" <name:"ident"> => RuleExpr::FieldMulti(fields, name),
+    "ident" => RuleExpr::SubruleRef(<>),
+    "(" <Rule> ")",
+};
+
+Field: FieldRef = {
+    "ident" => FieldRef::Named(<>),
+    "num" => FieldRef::Positional(<>),
+};

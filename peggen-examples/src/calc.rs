@@ -2,20 +2,28 @@ use crate::*;
 use bumpalo::boxed::Box as BBox;
 use bumpalo::collections::String as BString;
 
-#[derive(Debug, ParseImpl, SkipSpace, Num, EnumAstImpl)]
+#[derive(Debug, ParseImpl, Num, EnumAstImpl)]
 #[with(&'a bumpalo::Bump)]
+#[regex(_ = r"\s*")]
+#[regex(id = r"[a-z0-9]")]
 pub enum Expr<'a> {
-    #[rule("{0:0} + {1:1}", group=0)]
+    #[tag(add)]
+    #[rule($0@add _ "+" _ $1@mul)]
     Add(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
-    #[rule("{0:0} - {1:1}", group=0)]
+    #[tag(add)]
+    #[rule($0@add _ "-" _ $1@mul)]
     Sub(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
-    #[rule("{0:1} * {1:2}", group=1)]
+    #[tag(add, mul)]
+    #[rule($0@mul _ "*" _ $1@atom)]
     Mul(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
-    #[rule("{0:1} / {1:2}", group=1)]
+    #[tag(add, mul)]
+    #[rule($0@mul _ "/" _ $1@atom)]
     Div(BBox<'a, Expr<'a>>, BBox<'a, Expr<'a>>),
-    #[rule("{0:`[a-z0-9]`}", group=2)]
+    #[tag(add, mul, atom)]
+    #[rule($0:id)]
     Ident(BString<'a>),
-    #[rule(r"( {0} )", group=2)]
+    #[tag(add, mul, atom)]
+    #[rule("(" _ $0@add _ ")")]
     Scope(BBox<'a, Expr<'a>>),
 }
 

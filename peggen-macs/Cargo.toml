@@ -12,7 +12,11 @@ repository = "https://github.com/Y-jiji/peggen"
 [lib]
 proc-macro = true
 
+[build-dependencies]
+lalrpop = "0.23"
+
 [dependencies]
+lalrpop-util = "0.23"
 once_cell = "1.19.0"
 proc-macro2 = "1.0.86"
 quote = "1.0.36"

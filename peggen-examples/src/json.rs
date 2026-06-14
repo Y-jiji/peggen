@@ -1,22 +1,28 @@
 use std::fmt::Debug;
 use peggen::*;
 
-#[derive(Debug, Parse, SkipSpace)]
+#[derive(Debug, Parse)]
+#[regex(_    = r"\s*")]
+#[regex(num  = r"0|-?[1-9][0-9]*")]
+#[regex(flt  = r"-?(0|[1-9][0-9]*)\.([0-9]+)")]
+#[regex(str  = r#"[^"]*"#)]
+#[regex(bool = r"false|true")]
+#[subrule(kv = "\"" $0:str "\"" _ ":" _ $1)]
 pub enum Json {
-    #[rule(r"null")]
+    #[rule("null")]
     Null,
-    #[rule(r"{0:`false|true`}")]
+    #[rule($0:bool)]
     Bool(bool),
-    #[rule(r"{0:`-?(0|[1-9][0-9]*)\.([0-9]+)`}")]
+    #[rule($0:flt)]
     Flt(f32),
-    #[rule("{0:`0|-?[1-9][0-9]*`}")]
+    #[rule($0:num)]
     Num(i32),
-    #[rule(r#""{0:`[^"]*`}""#)]
+    #[rule("\"" $0:str "\"")]
     Str(String),
-    #[rule(r#"\{ [*0: "{0:`[^"]*`}" : {1} , ][?0: "{0:`[^"]*`}" : {1} ] \}"#)]
+    #[rule("{" _ $0:kv *% (_ "," _) _ "}")]
     Obj(Vec<(String, Json)>),
-    #[rule(r"\[ [*0: {0} , ][?0: {0} ] \]")]
-    Arr(Vec<Json>)
+    #[rule("[" _ $0 *% (_ "," _) _ "]")]
+    Arr(Vec<Json>),
 }
 
 #[cfg(test)]
@@ -32,10 +38,8 @@ mod test {
 
     #[test]
     fn json_bench() {
-        // 867913 ns/iter: this crate
         let x = std::time::SystemTime::now();
         for i in 0..100 { json() };
         println!("peggen: {}", x.elapsed().unwrap().as_nanos() / 10000);
     }
-
 }

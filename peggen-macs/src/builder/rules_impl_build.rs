@@ -1,13 +1,14 @@
+use std::collections::HashMap;
 use crate::*;
+use crate::rule_ast::*;
 
 impl Builder {
-    // build the rule trait(s) for the given type
     pub fn rules_impl_build(&self) -> Result<TokenStream> {
         let mut impls = TokenStream::new();
         let r#impl = |num, ident, generics, variant, trace, body| {
-            let (trace_start, trace_end_ok, trace_end_err) = 
+            let (trace_start, trace_end_ok, trace_end_err) =
                 if trace { (
-                    quote!{println!("TRY\t{}::{} @ {end}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);}, 
+                    quote!{println!("TRY\t{}::{} @ {end}\t{}", stringify!(#ident), stringify!(#variant), &input[end..]);},
                     quote!{println!("OK\t{}::{} @ {start}..{end}\t{}", stringify!(#ident), stringify!(#variant), &input[start..end]);},
                     quote!{println!("ERR\t{}::{}", stringify!(#ident), stringify!(#variant)); },
                 ) }
@@ -16,16 +17,15 @@ impl Builder {
                 impl<#generics const ERROR: bool> #CRATE::RuleImpl<#num, ERROR> for #ident<#generics> {
                     #[inline(always)]
                     fn rule_impl(
-                        input: &str, end: usize,        // input[end..] represents the unparsed source
-                        depth: usize,                   // left recursion depth
-                        first: bool,                    // whether stack top is considered a token
-                        trace: &mut Vec<usize>,         // non-terminal symbols 
-                        stack: &mut Vec<#CRATE::Tag>,   // stack of suffix code
+                        input: &str, end: usize,
+                        depth: usize,
+                        first: bool,
+                        trace: &mut Vec<usize>,
+                        stack: &mut Vec<#CRATE::Tag>,
                     ) -> Result<usize, ()> {
-                        // TODO: enforce a rule to be non-empty
                         #trace_start
-                        let start = end;        // this is the starting point of this parsing pass
-                        let mut head = true;    // tracks if it is the first sub-peg (might be modified by sub pegs)
+                        let start = end;
+                        let mut head = true;
                         let Ok(end) = (#body) else {
                             #trace_end_err
                             return Err(());
@@ -47,141 +47,385 @@ impl Builder {
             }
         };
         for (num, rule) in self.rules.iter().enumerate() {
-            let body = self.rules_vect_build(&rule.exprs)?;
+            let body = self.rules_expr_build(&rule.body, &rule.fields)?;
             impls.extend(r#impl(num, &self.ident, &self.generics, &rule.variant, rule.trace, body));
         };
         Ok(impls)
     }
-    // build a vector of rules
-    fn rules_vect_build(&self, seq: &[Fmt]) -> Result<TokenStream> {    
-        let seq = seq.iter().map(|fmt: &Fmt| {
-            let result = self.rules_item_build(fmt)?;
-            Ok(result)
-        }).fold(Ok(vec![]), |v: Result<_>, x: Result<_> | {
-            let mut v = v?;
-            v.push(x?); Ok(v)
-        })?;
-        Ok(quote!{{(|| -> Result<usize, ()> {
-            let size = stack.len();
-            #(let Ok(end) = (#seq) else {
-                stack.resize_with(size, || unreachable!());
-                Err(())?
-            };)*
-            Ok::<_, ()>(end)
-        })()}})
-    }
-    // fmt: the format string to translate
-    // head: if the format string is the first symbol in this rule
-    fn rules_item_build(&self, fmt: &Fmt) -> Result<TokenStream> {
-        use Fmt::*;
-        match fmt {
-            Space => {Ok(quote! {
+
+    fn rules_expr_build(&self, expr: &RuleExpr, fields: &HashMap<String, Type>) -> Result<TokenStream> {
+        match expr {
+            RuleExpr::Literal(s) => Ok(quote! {{
                 if head && first { Err(()) }
-                else if let Ok(end_) = Self::space(input, end) {
-                    head &= end_ == end;
-                    Ok(end_)
+                else if input[end..].starts_with(#s) {
+                    head &= #s.len() == 0;
+                    Ok::<_, ()>(end + #s.len())
                 }
                 else { Err(()) }
-            })}
-            Token { token } => {Ok(quote! {{
-                // if regex is the first token, and the stack top is considered as a token
-                // then certainly this will not match
-                if head && first { Err(()) }
-                // if the prefix matches the token, 
-                // remove token from input stream and proceed
-                else if input[end..].starts_with(#token) {
-                    head &= #token.len() == 0;
-                    Ok::<_, ()>(end + #token.len())
-                }
-                else { Err(()) }
-            }})}
-            Symbol { typ, group, .. } => {Ok(quote! {{
-                match <#typ as #CRATE::ParseImpl<#group, ERROR>>::parse_impl(
-                    // pass 'input' and 'end' as-is
-                    input, end,
-                    // if it is the head, add 1 to left recursion depth
-                    // otherwise, depth should be cleared (since it cannot recurse on the same pos)
-                    if head { depth + 1 } else { 0 },
-                    // the stack top can only used as the leftmost token
-                    // so the 'first' proposition only holds when it is the head element
-                    head && first,
-                    // pass 'trace' and 'stack' as-is
-                    trace, stack
-                ) {
-                    Ok(end_) if end_ > end => { head = false; Ok(end_) }
-                    other => other
-                }
-            }})}
-            RegExp { regex, refute, .. } => {Ok(quote! {{(|| -> Result<usize, ()> {
-                // if regex is the first token, and the stack top is considered as a token
-                // then certainly this will not match
-                if head && first { Err(())? }
-                // when the prefix matches the regex, 
-                // remove the matched part from input stream and proceed
-                static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
-                    #CRATE::Regex::new(concat!("^(", #regex, ")")).unwrap()
-                });
-                let start = end;
-                let end = start + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
-                // check if the matched string matches the refute pattern
-                {
-                    static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| 
-                        #CRATE::Regex::new(concat!("^(", #refute, ")$")).unwrap()
-                    );
-                    if #refute.len() != 0 && REGEX.is_match(&input[start..end]) {
-                        Err(())
+            }}),
+
+            RuleExpr::Field(fref) => {
+                let key = fref.key();
+                let typ = fields.get(&key)
+                    .ok_or_else(|| Error::new(proc_macro2::Span::call_site(),
+                        format!("unknown field '{}' in rule for '{}'", key, self.ident)))?;
+                Ok(quote! {{
+                    match <#typ as #CRATE::ParseImpl<0, ERROR>>::parse_impl(
+                        input, end,
+                        if head { depth + 1 } else { 0 },
+                        head && first,
+                        trace, stack
+                    ) {
+                        Ok(end_) if end_ > end => { head = false; Ok(end_) }
+                        other => other
                     }
-                    else {
+                }})
+            }
+
+            RuleExpr::FieldTag(fref, tag) => {
+                let key = fref.key();
+                let typ = fields.get(&key)
+                    .ok_or_else(|| Error::new(proc_macro2::Span::call_site(),
+                        format!("unknown field '{}' in rule for '{}'", key, self.ident)))?;
+                let group = self.tag_index(tag)?;
+                Ok(quote! {{
+                    match <#typ as #CRATE::ParseImpl<#group, ERROR>>::parse_impl(
+                        input, end,
+                        if head { depth + 1 } else { 0 },
+                        head && first,
+                        trace, stack
+                    ) {
+                        Ok(end_) if end_ > end => { head = false; Ok(end_) }
+                        other => other
+                    }
+                }})
+            }
+
+            RuleExpr::FieldRegex(_fref, name) => {
+                if let Some(sub_expr) = self.context.subrules.get(name).cloned() {
+                    let key = _fref.key();
+                    let typ = fields.get(&key)
+                        .ok_or_else(|| Error::new(proc_macro2::Span::call_site(),
+                            format!("unknown field '{}' in rule for '{}'", key, self.ident)))?;
+                    let sub_fields = crate::builder::build_item_fields(typ);
+                    self.rules_expr_build(&sub_expr, &sub_fields)
+                } else if let Some(regex_pattern) = self.context.regexes.get(name).cloned() {
+                    Ok(quote! {{(|| -> Result<usize, ()> {
+                        if head && first { Err(())? }
+                        static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
+                            #CRATE::Regex::new(concat!("^(", #regex_pattern, ")")).unwrap()
+                        });
+                        let start = end;
+                        let end = start + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
                         #CRATE::stack_sanity_check(input, stack, start..end);
                         stack.push(#CRATE::Tag { rule: 0, span: start..end });
                         head = false;
                         Ok::<_, ()>(end)
-                    }
+                    })()}})
+                } else {
+                    Err(Error::new(proc_macro2::Span::call_site(),
+                        format!("unknown regex or subrule '{name}', declare with #[regex({name} = r\"...\")] or #[subrule({name} = ...)]")))
                 }
-            })()}})}
-            SeqExp { children, .. } => {
-                let children = children.iter().map(|(subfmt, flag)| {
-                    let subfmt = self.rules_vect_build(subfmt)?;
-                    match flag {
-                        Flag::Repeat => {Ok(quote! {{
-                            let start = end;
-                            let mut end = end;
-                            while let Ok(end_) = #subfmt {
-                                end = end_;
-                                cnt = cnt + 1;
-                            }
-                            Ok::<_, ()>(end)
-                        }})}
-                        Flag::OrNot => {Ok(quote! {{
-                            match #subfmt {
-                                Ok(end) => {cnt += 1; Ok::<_, ()>(end)}
-                                Err(()) => {cnt += 0; Ok::<_, ()>(end)}
-                            }
-                        }})}
-                        Flag::Just => {Ok(quote! {{
-                            match #subfmt {
-                                Ok(end) => {cnt += 1; Ok::<_, ()>(end)}
-                                Err(()) => {Err(())}
-                            }
-                        }})}
+            }
+
+            RuleExpr::FieldMulti(frefs, name) => {
+                let sub_expr = self.context.subrules.get(name)
+                    .ok_or_else(|| Error::new(proc_macro2::Span::call_site(),
+                        format!("${{...}}:{name} requires a subrule, not a regex; declare with #[subrule({name} = ...)]")))?;
+                let remapped = crate::builder::remap_subrule_fields(sub_expr, frefs);
+                self.rules_expr_build(&remapped, fields)
+            }
+
+            RuleExpr::SubruleRef(name) => {
+                if let Some(sub_expr) = self.context.subrules.get(name).cloned() {
+                    if sub_expr.has_field_refs() {
+                        return Err(Error::new(proc_macro2::Span::call_site(),
+                            format!("subrule '{name}' has field captures ($0, $1, ...); use $field:{name} to capture or ${{f1,f2}}:{name} to unpack")));
                     }
-                }).fold(Ok(vec![]), |v: Result<_>, x: Result<_> | {
-                    let mut v = v?;
-                    v.push(x?); Ok(v)
-                })?;
-                Ok(quote!{{(|| -> Result<usize, ()> {
+                    self.rules_expr_build(&sub_expr, fields)
+                } else if let Some(regex_pattern) = self.context.regexes.get(name).cloned() {
+                    Ok(quote! {{(|| -> Result<usize, ()> {
+                        if head && first { Err(())? }
+                        static REGEX: #CRATE::LazyLock<#CRATE::Regex> = #CRATE::LazyLock::new(|| {
+                            #CRATE::Regex::new(concat!("^(", #regex_pattern, ")")).unwrap()
+                        });
+                        let end = end + REGEX.find(&input[end..]).map(|mat| mat.as_str().len()).ok_or(())?;
+                        head = false;
+                        Ok::<_, ()>(end)
+                    })()}})
+                } else {
+                    Err(Error::new(proc_macro2::Span::call_site(),
+                        format!("unknown subrule or regex '{name}', declare with #[subrule({name} = ...)] or #[regex({name} = r\"...\")]")))
+                }
+            }
+
+            RuleExpr::Seq(elems) => {
+                let parts = elems.iter()
+                    .map(|elem| self.rules_expr_build(elem, fields))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(quote! {{(|| -> Result<usize, ()> {
                     let size = stack.len();
-                    let mut cnt = 0;
-                    let start = end;
-                    #(let Ok(end) = (#children) else {
+                    #(let Ok(end) = (#parts) else {
                         stack.resize_with(size, || unreachable!());
                         Err(())?
                     };)*
+                    Ok::<_, ()>(end)
+                })()}})
+            }
+
+            RuleExpr::Choice(a, b) => {
+                let code_a = self.rules_expr_build(a, fields)?;
+                let code_b = self.rules_expr_build(b, fields)?;
+                Ok(quote! {{(|| -> Result<usize, ()> {
+                    let size = stack.len();
+                    match (#code_a) {
+                        Ok(end) => Ok(end),
+                        Err(()) => {
+                            stack.resize_with(size, || unreachable!());
+                            #code_b
+                        }
+                    }
+                })()}})
+            }
+
+            RuleExpr::Rep(inner, kind) => {
+                let expanded = crate::builder::expand_subrule_refs(inner, &self.context.subrules);
+                let has_fields = expanded.has_field_refs();
+                if has_fields {
+                    let resolved = crate::builder::resolve_rep_fields(&expanded, fields);
+                    let sub_fields = resolved.as_ref().map(|(_, f)| f).unwrap_or(fields);
+                    self.rules_collection_rep_build(&expanded, *kind, sub_fields)
+                } else {
+                    self.rules_simple_rep_build(&expanded, *kind, fields)
+                }
+            }
+
+            RuleExpr::SepRep { expr, sep, at_least_one } => {
+                let expanded = crate::builder::expand_subrule_refs(expr, &self.context.subrules);
+                let has_fields = expanded.has_field_refs();
+                if has_fields {
+                    let resolved = crate::builder::resolve_rep_fields(&expanded, fields);
+                    let sub_fields = resolved.as_ref().map(|(_, f)| f).unwrap_or(fields);
+                    self.rules_sep_rep_build(&expanded, sep, *at_least_one, sub_fields)
+                } else {
+                    self.rules_sep_rep_build(&expanded, sep, *at_least_one, fields)
+                }
+            }
+
+            RuleExpr::Not(inner) => {
+                let code = self.rules_expr_build(inner, fields)?;
+                Ok(quote! {{
+                    let saved = stack.len();
+                    let result = #code;
+                    stack.truncate(saved);
+                    match result {
+                        Ok(_) => Err(()),
+                        Err(()) => Ok::<_, ()>(end),
+                    }
+                }})
+            }
+
+            RuleExpr::And(inner) => {
+                let code = self.rules_expr_build(inner, fields)?;
+                Ok(quote! {{
+                    let saved = stack.len();
+                    let result = #code;
+                    stack.truncate(saved);
+                    match result {
+                        Ok(_) => Ok::<_, ()>(end),
+                        Err(()) => Err(()),
+                    }
+                }})
+            }
+        }
+    }
+
+    fn rules_simple_rep_build(&self, inner: &RuleExpr, kind: RepKind, fields: &HashMap<String, Type>) -> Result<TokenStream> {
+        let inner_code = self.rules_expr_build(inner, fields)?;
+        match kind {
+            RepKind::ZeroOrMore => Ok(quote! {{
+                let mut end = end;
+                while let Ok(end_) = (#inner_code) {
+                    if end_ <= end { break; }
+                    end = end_;
+                }
+                Ok::<_, ()>(end)
+            }}),
+            RepKind::OneOrMore => {
+                let inner_code2 = self.rules_expr_build(inner, fields)?;
+                Ok(quote! {{(|| -> Result<usize, ()> {
+                    let Ok(mut end) = (#inner_code) else { Err(())? };
+                    while let Ok(end_) = (#inner_code2) {
+                        if end_ <= end { break; }
+                        end = end_;
+                    }
+                    Ok::<_, ()>(end)
+                })()}})
+            }
+            RepKind::Optional => Ok(quote! {{
+                match (#inner_code) {
+                    Ok(end) => Ok::<_, ()>(end),
+                    Err(()) => Ok::<_, ()>(end),
+                }
+            }}),
+        }
+    }
+
+    fn rules_collection_rep_build(&self, inner: &RuleExpr, kind: RepKind, fields: &HashMap<String, Type>) -> Result<TokenStream> {
+        let inner_code = self.rules_expr_build(inner, fields)?;
+        match kind {
+            RepKind::ZeroOrMore => Ok(quote! {{(|| -> Result<usize, ()> {
+                let size = stack.len();
+                let mut cnt = 0usize;
+                let start = end;
+                let mut end = end;
+                while let Ok(end_) = (#inner_code) {
+                    if end_ <= end { break; }
+                    end = end_;
+                    cnt += 1;
+                }
+                #CRATE::stack_sanity_check(input, stack, start..end);
+                stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                Ok::<_, ()>(end)
+            })()}}),
+            RepKind::OneOrMore => {
+                let inner_code2 = self.rules_expr_build(inner, fields)?;
+                Ok(quote! {{(|| -> Result<usize, ()> {
+                    let size = stack.len();
+                    let mut cnt = 0usize;
+                    let start = end;
+                    let Ok(mut end) = (#inner_code) else {
+                        stack.resize_with(size, || unreachable!());
+                        Err(())?
+                    };
+                    cnt += 1;
+                    while let Ok(end_) = (#inner_code2) {
+                        if end_ <= end { break; }
+                        end = end_;
+                        cnt += 1;
+                    }
+                    #CRATE::stack_sanity_check(input, stack, start..end);
+                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                    Ok::<_, ()>(end)
+                })()}})
+            }
+            RepKind::Optional => {
+                Ok(quote! {{(|| -> Result<usize, ()> {
+                    let size = stack.len();
+                    let mut cnt = 0usize;
+                    let start = end;
+                    let end = match (#inner_code) {
+                        Ok(end) => { cnt = 1; end }
+                        Err(()) => { stack.resize_with(size, || unreachable!()); end }
+                    };
                     #CRATE::stack_sanity_check(input, stack, start..end);
                     stack.push(#CRATE::Tag { rule: cnt, span: start..end });
                     Ok::<_, ()>(end)
                 })()}})
             }
         }
-    }    
+    }
+
+    fn rules_sep_rep_build(&self, expr: &RuleExpr, sep: &RuleExpr, at_least_one: bool, fields: &HashMap<String, Type>) -> Result<TokenStream> {
+        let has_fields = expr.has_field_refs();
+        let item_code = self.rules_expr_build(expr, fields)?;
+        let item_code2 = self.rules_expr_build(expr, fields)?;
+        let sep_code = self.rules_expr_build(sep, fields)?;
+
+        if has_fields {
+            if at_least_one {
+                Ok(quote! {{(|| -> Result<usize, ()> {
+                    let size = stack.len();
+                    let mut cnt = 0usize;
+                    let start = end;
+                    let Ok(mut end) = (#item_code) else {
+                        stack.resize_with(size, || unreachable!());
+                        Err(())?
+                    };
+                    cnt += 1;
+                    loop {
+                        let saved_end = end;
+                        let saved_stack = stack.len();
+                        let Ok(end_sep) = ((|| -> Result<usize, ()> { let end = end; #sep_code })()) else {
+                            break;
+                        };
+                        match ((|| -> Result<usize, ()> { let end = end_sep; #item_code2 })()) {
+                            Ok(end_) if end_ > saved_end => { end = end_; cnt += 1; }
+                            _ => {
+                                stack.resize_with(saved_stack, || unreachable!());
+                                break;
+                            }
+                        }
+                    }
+                    #CRATE::stack_sanity_check(input, stack, start..end);
+                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                    Ok::<_, ()>(end)
+                })()}})
+            } else {
+                Ok(quote! {{(|| -> Result<usize, ()> {
+                    let size = stack.len();
+                    let mut cnt = 0usize;
+                    let start = end;
+                    let mut end = end;
+                    if let Ok(end_) = (#item_code) {
+                        end = end_;
+                        cnt += 1;
+                        loop {
+                            let saved_end = end;
+                            let saved_stack = stack.len();
+                            let Ok(end_sep) = ((|| -> Result<usize, ()> { let end = end; #sep_code })()) else {
+                                break;
+                            };
+                            match ((|| -> Result<usize, ()> { let end = end_sep; #item_code2 })()) {
+                                Ok(end_) if end_ > saved_end => { end = end_; cnt += 1; }
+                                _ => {
+                                    stack.resize_with(saved_stack, || unreachable!());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    #CRATE::stack_sanity_check(input, stack, start..end);
+                    stack.push(#CRATE::Tag { rule: cnt, span: start..end });
+                    Ok::<_, ()>(end)
+                })()}})
+            }
+        } else {
+            if at_least_one {
+                Ok(quote! {{(|| -> Result<usize, ()> {
+                    let start = end;
+                    let Ok(mut end) = (#item_code) else { Err(())? };
+                    loop {
+                        let saved_end = end;
+                        let Ok(end_sep) = ((|| -> Result<usize, ()> { let end = end; #sep_code })()) else {
+                            break;
+                        };
+                        match ((|| -> Result<usize, ()> { let end = end_sep; #item_code2 })()) {
+                            Ok(end_) if end_ > saved_end => { end = end_; }
+                            _ => { break; }
+                        }
+                    }
+                    Ok::<_, ()>(end)
+                })()}})
+            } else {
+                Ok(quote! {{
+                    let mut end = end;
+                    if let Ok(end_) = (#item_code) {
+                        end = end_;
+                        loop {
+                            let saved_end = end;
+                            let Ok(end_sep) = ((|| -> Result<usize, ()> { let end = end; #sep_code })()) else {
+                                break;
+                            };
+                            match ((|| -> Result<usize, ()> { let end = end_sep; #item_code2 })()) {
+                                Ok(end_) if end_ > saved_end => { end = end_; }
+                                _ => { break; }
+                            }
+                        }
+                    }
+                    Ok::<_, ()>(end)
+                }})
+            }
+        }
+    }
 }

@@ -1,5 +1,5 @@
 #![allow(unused)]
-use peggen::{EnumAstImpl, AstImpl, Num, ParseImpl, PushImpl, SkipSpace};
+use peggen::{EnumAstImpl, AstImpl, Num, ParseImpl, PushImpl};
 
 mod json;
 mod json_chumsky;

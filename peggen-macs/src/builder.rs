@@ -1,10 +1,12 @@
-use std::sync::LazyLock;
+use std::collections::HashMap;
 use punctuated::Punctuated;
 use quote::ToTokens;
-use regex::Regex;
 use token::Comma;
 
 use crate::*;
+use crate::rule_ast::*;
+use crate::attr_parser::*;
+
 mod ast_impl_build;
 mod num_build;
 mod rules_impl_build;
@@ -12,121 +14,92 @@ mod parse_impl_build;
 pub use ast_impl_build::*;
 pub use num_build::*;
 
-#[derive(Debug)]
 pub(crate) struct Rule {
-    group: usize,
-    named: bool,
-    trace: bool,
-    error: bool,
-    exprs: Vec<Fmt>,
-    variant: Ident,
+    pub group: usize,
+    pub tags: Vec<String>,
+    pub named: bool,
+    pub trace: bool,
+    pub error: bool,
+    pub body: RuleExpr,
+    pub variant: Ident,
+    pub fields: HashMap<String, Type>,
+}
+
+impl std::fmt::Debug for Rule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Rule")
+            .field("group", &self.group)
+            .field("tags", &self.tags)
+            .field("named", &self.named)
+            .field("trace", &self.trace)
+            .field("error", &self.error)
+            .field("body", &self.body)
+            .field("variant", &self.variant.to_string())
+            .finish()
+    }
 }
 
 impl Rule {
-    pub fn new(fields: Fields, ident: Ident, attr: Attribute) -> Result<Rule> {
+    pub fn new(fields: Fields, ident: Ident, attr: Attribute, _ctx: &GrammarContext, all_tags: &[String]) -> Result<Rule> {
         let mut rule = Rule {
             group: 0,
+            tags: vec![],
             named: matches!(fields, Fields::Named(..) | Fields::Unit),
             error: false,
             trace: false,
-            exprs: vec![],
+            body: RuleExpr::Literal(String::new()),
             variant: ident.clone(),
+            fields: HashMap::new(),
         };
-        let fmt = FmtParser::new(fields)?;
-        // The arguments to parse
-        let args = attr.meta.require_list()?;
-        let mut tokens = args.tokens.clone().into_iter();
-        // Iterate over all the tokens within attribute marker
-        while let Some(token) = tokens.next() {
-            macro_rules! expect {
-                ($x: literal) => {{
-                    let Some(token) = tokens.next() else {
-                        Err(Error::new_spanned(args, format!("expected {}, tokens depleted", $x)))?
-                    };
-                    if token.to_string() != $x {
-                        Err(Error::new_spanned(token, format!("expected {}", $x)))?
-                    }
-                }};
-            }
-            macro_rules! get {
-                ($T: ty) => {{
-                    let Some(token) = tokens.next() else {
-                        Err(Error::new_spanned(args, format!("tokens depleted")))?
-                    };
-                    let value = token.to_string().parse::<$T>().map_err(|_| 
-                        Error::new_spanned(token.clone(), format!("expected {} found {token}", stringify!($T)))
-                    )?;
-                    value
-                }};
-            }
-            if let TokenTree::Literal(lit) = token {
-                static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new("^r#*\"").unwrap());
-                let s = lit.to_string();
-                let s = if let Some(i) = REGEX.find(&s) {
-                    &s[i.len()..s.len()-i.len()+1]
-                } else if s.starts_with("\"") {
-                    &s[1..s.len()-1]
-                } else {
-                    continue;
-                };
-                let (_, exprs) = fmt.many(&s, 0)
-                    .map_err(|e| Error::new_spanned(lit.clone(), format!("{e:?}")))?;
-                if rule.exprs.is_empty() {
-                    rule.exprs = exprs;
-                }
-                else {
-                    Err(Error::new_spanned(lit, format!("Why do you want a second format string?")))?
-                }
-                continue;
-            }
-            if let TokenTree::Ident(ident) = token {
-                match ident.to_string().as_str() {
-                    "group" => {
-                        expect!("=");
-                        let g = get!(usize);
-                        rule.group = g;
-                    }
-                    "error" => {
-                        rule.error = true;
-                    }
-                    "trace" => {
-                        rule.trace = true;
-                    }
-                    _ => {
-                        Err(Error::new_spanned(ident, "bad identity, expect group"))?
-                    }
+        match fields {
+            Fields::Named(FieldsNamed { named, .. }) => {
+                for field in named {
+                    rule.fields.insert(
+                        field.ident.to_token_stream().to_string(),
+                        field.ty,
+                    );
                 }
             }
+            Fields::Unnamed(FieldsUnnamed { unnamed, .. }) => {
+                for (i, field) in unnamed.into_iter().enumerate() {
+                    rule.fields.insert(format!("{i}"), field.ty);
+                }
+            }
+            Fields::Unit => {}
         }
+        let args = attr.meta.require_list()?;
+        rule.body = parse_rule_tokens(args.tokens.clone(), &attr)?;
+
+        if !all_tags.is_empty() {
+            rule.group = 0;
+        }
+
         Ok(rule)
     }
 }
 
-/// A builder type for building parser
 pub(crate) struct Builder {
-    /// All the rules. 
-    rules: Vec<Rule>,
-    /// Largest group number
-    group: usize,
-    /// If this type is enum
-    is_enum: bool,
-    /// The identity of this type
-    ident: Ident,
-    /// The attributes attached to type
-    with: Option<TokenStream>,
-    /// The generics of this type
-    generics: Punctuated<GenericParam, Comma>,
+    pub rules: Vec<Rule>,
+    pub group: usize,
+    pub all_tags: Vec<String>,
+    pub is_enum: bool,
+    pub ident: Ident,
+    pub with: Option<TokenStream>,
+    pub generics: Punctuated<GenericParam, Comma>,
+    pub context: GrammarContext,
 }
 
 impl std::fmt::Debug for Builder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RuleGroup {{ rules: {:?}, group: {:?}, ident: {:?}, generics: {:?} }}", 
+        write!(f, "Builder {{ rules: {:?}, group: {:?}, ident: {:?}, generics: {:?} }}",
             self.rules, self.group, self.ident.to_string(), self.generics.to_token_stream().to_string())
     }
 }
 
 impl Builder {
     pub fn new(input: DeriveInput) -> Result<Self> {
+        let context = GrammarContext::from_attrs(&input.attrs)?;
+
         let mut this = Builder {
             with: match input.attrs.iter().filter(|x| x.path().is_ident("with")).next().cloned() {
                 None => None,
@@ -134,49 +107,80 @@ impl Builder {
             },
             rules: vec![],
             group: 0,
+            all_tags: vec![],
             is_enum: false,
             ident: input.ident.clone(),
             generics: {
                 let mut p = input.generics.clone().params;
                 if !p.empty_or_trailing() { p.push_punct(Comma::default()); }
                 p
-            }
+            },
+            context,
         };
         match input.data {
             Data::Struct(r#struct) => {
+                let tags = parse_tags(&input.attrs)?;
                 for attr in input.attrs {
                     if attr.path().to_token_stream().to_string() != "rule" {
                         continue;
                     }
-                    this.add_rule(Rule::new(
-                        r#struct.fields.clone(), 
-                        input.ident.clone(), 
-                        attr
-                    )?);
+                    let mut rule = Rule::new(
+                        r#struct.fields.clone(),
+                        input.ident.clone(),
+                        attr,
+                        &this.context,
+                        &this.all_tags,
+                    )?;
+                    rule.tags = tags.clone();
+                    this.add_rule(rule);
                 }
                 this.is_enum = false;
                 Ok(this)
             },
             Data::Enum(r#enum) => {
-                let variants = r#enum.variants.into_iter()
-                    .filter(|var| var.attrs.iter().filter(|x| x.path().is_ident("rule")).next().is_some());
-                for variant in variants {
-                    for attr in variant.attrs {
-                        if attr.path().to_token_stream().to_string() != "rule" {
-                            continue;
+                let mut has_tags = false;
+                let mut has_no_tags = false;
+                let variants: Vec<_> = r#enum.variants.into_iter()
+                    .filter(|var| var.attrs.iter().any(|x| x.path().is_ident("rule")))
+                    .collect();
+                for variant in &variants {
+                    let tags = parse_tags(&variant.attrs)?;
+                    if !tags.is_empty() {
+                        has_tags = true;
+                        for t in &tags {
+                            if !this.all_tags.contains(t) {
+                                this.all_tags.push(t.clone());
+                            }
                         }
-                        this.add_rule(Rule::new(
-                            variant.fields.clone(), 
-                            variant.ident.clone(), 
-                            attr
-                        )?);
+                    } else {
+                        has_no_tags = true;
+                    }
+                }
+                if has_tags && has_no_tags {
+                    return Err(Error::new_spanned(
+                        input.ident,
+                        "if any variant has #[tag(...)], all variants with #[rule] must have #[tag(...)]"
+                    ));
+                }
+                for variant in variants {
+                    let tags = parse_tags(&variant.attrs)?;
+                    for attr in variant.attrs.iter().filter(|a| a.path().is_ident("rule")) {
+                        let mut rule = Rule::new(
+                            variant.fields.clone(),
+                            variant.ident.clone(),
+                            attr.clone(),
+                            &this.context,
+                            &this.all_tags,
+                        )?;
+                        rule.tags = tags.clone();
+                        this.add_rule(rule);
                     }
                 }
                 this.is_enum = true;
                 Ok(this)
             }
             Data::Union(_) => Err(Error::new_spanned(
-                input, 
+                input,
                 "expect derive(ParseImpl) to work on enum or struct, but we get union. "
             )),
         }
@@ -185,4 +189,141 @@ impl Builder {
         self.group = self.group.max(rule.group);
         self.rules.push(rule);
     }
+    pub fn tag_index(&self, name: &str) -> Result<usize> {
+        self.all_tags.iter().position(|t| t == name)
+            .ok_or_else(|| Error::new(
+                proc_macro2::Span::call_site(),
+                format!("unknown tag '{name}', known tags: {:?}", self.all_tags)
+            ))
+    }
+    pub fn max_group(&self) -> usize {
+        if self.all_tags.is_empty() {
+            self.group
+        } else {
+            self.all_tags.len() - 1
+        }
+    }
+}
+
+pub(crate) fn extract_item_type(typ: &Type) -> Option<Type> {
+    match typ {
+        Type::Path(TypePath { path, .. }) => {
+            let last = path.segments.last()?;
+            let PathArguments::AngleBracketed(ref args) = last.arguments else {
+                return None;
+            };
+            use GenericArgument::Type as Ty;
+            args.args.iter()
+                .filter_map(|arg| if let Ty(arg) = arg { Some(arg) } else { None })
+                .last()
+                .cloned()
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn build_item_fields(item_type: &Type) -> HashMap<String, Type> {
+    let mut map = HashMap::new();
+    match item_type {
+        Type::Tuple(tuple) => {
+            for (i, ty) in tuple.elems.iter().enumerate() {
+                map.insert(format!("{i}"), ty.clone());
+            }
+        }
+        other => {
+            map.insert("0".to_string(), other.clone());
+        }
+    }
+    map
+}
+
+pub(crate) fn expand_subrule_refs(expr: &RuleExpr, subrules: &HashMap<String, RuleExpr>) -> RuleExpr {
+    match expr {
+        RuleExpr::FieldRegex(_fref, name) => {
+            if let Some(body) = subrules.get(name) {
+                body.clone()
+            } else {
+                expr.clone()
+            }
+        }
+        RuleExpr::Seq(elems) => {
+            RuleExpr::Seq(elems.iter().map(|e| expand_subrule_refs(e, subrules)).collect())
+        }
+        RuleExpr::Choice(a, b) => {
+            RuleExpr::Choice(
+                Box::new(expand_subrule_refs(a, subrules)),
+                Box::new(expand_subrule_refs(b, subrules)),
+            )
+        }
+        RuleExpr::Not(e) => RuleExpr::Not(Box::new(expand_subrule_refs(e, subrules))),
+        RuleExpr::And(e) => RuleExpr::And(Box::new(expand_subrule_refs(e, subrules))),
+        _ => expr.clone(),
+    }
+}
+
+pub(crate) fn remap_subrule_fields(expr: &RuleExpr, mapping: &[FieldRef]) -> RuleExpr {
+    match expr {
+        RuleExpr::Field(FieldRef::Positional(i)) if *i < mapping.len() => {
+            RuleExpr::Field(mapping[*i].clone())
+        }
+        RuleExpr::FieldRegex(FieldRef::Positional(i), name) if *i < mapping.len() => {
+            RuleExpr::FieldRegex(mapping[*i].clone(), name.clone())
+        }
+        RuleExpr::FieldTag(FieldRef::Positional(i), tag) if *i < mapping.len() => {
+            RuleExpr::FieldTag(mapping[*i].clone(), tag.clone())
+        }
+        RuleExpr::Seq(elems) => {
+            RuleExpr::Seq(elems.iter().map(|e| remap_subrule_fields(e, mapping)).collect())
+        }
+        RuleExpr::Choice(a, b) => {
+            RuleExpr::Choice(
+                Box::new(remap_subrule_fields(a, mapping)),
+                Box::new(remap_subrule_fields(b, mapping)),
+            )
+        }
+        RuleExpr::Rep(e, k) => RuleExpr::Rep(Box::new(remap_subrule_fields(e, mapping)), *k),
+        RuleExpr::SepRep { expr, sep, at_least_one } => {
+            RuleExpr::SepRep {
+                expr: Box::new(remap_subrule_fields(expr, mapping)),
+                sep: Box::new(remap_subrule_fields(sep, mapping)),
+                at_least_one: *at_least_one,
+            }
+        }
+        RuleExpr::Not(e) => RuleExpr::Not(Box::new(remap_subrule_fields(e, mapping))),
+        RuleExpr::And(e) => RuleExpr::And(Box::new(remap_subrule_fields(e, mapping))),
+        _ => expr.clone(),
+    }
+}
+
+pub(crate) fn resolve_rep_fields(
+    body: &RuleExpr,
+    outer_fields: &HashMap<String, Type>,
+) -> Option<(String, HashMap<String, Type>)> {
+    if let RuleExpr::Field(fref) | RuleExpr::FieldTag(fref, _) = body {
+        let key = fref.key();
+        if let Some(typ) = outer_fields.get(&key) {
+            if let Some(item_type) = extract_item_type(typ) {
+                return Some((key, build_item_fields(&item_type)));
+            }
+        }
+        return None;
+    }
+    let mut refs = vec![];
+    body.collect_field_refs(&mut refs);
+    if refs.is_empty() {
+        return None;
+    }
+    for key in ["0", "1", "2", "3", "4", "5", "6", "7"] {
+        if let Some(typ) = outer_fields.get(key) {
+            if let Some(item_type) = extract_item_type(typ) {
+                return Some((key.to_string(), build_item_fields(&item_type)));
+            }
+        }
+    }
+    for (key, typ) in outer_fields {
+        if let Some(item_type) = extract_item_type(typ) {
+            return Some((key.clone(), build_item_fields(&item_type)));
+        }
+    }
+    None
 }

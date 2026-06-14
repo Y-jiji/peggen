@@ -1,18 +1,22 @@
 use std::fmt::Debug;
 use peggen::*;
 
-#[derive(Debug, ParseImpl, SkipSpace, Num, EnumAstImpl)]
+#[derive(Debug, ParseImpl, Num, EnumAstImpl)]
+#[regex(_ = r"\s*")]
+#[subrule(field = $0 _ ":" _ $1)]
 pub enum Ty {
-    #[rule(r"{0}")]
+    #[rule($0)]
     Symbol(Id),
-    #[rule(r"int")]
+    #[rule("int")]
     Int{},
-    #[rule(r"\{[0: {0} : {1} ][*0: , {0} : {1} ]\}")]
+    #[rule("{" _ $0:field *% (_ "," _) _ "}")]
     Struct(Vec<(Id, Ty)>),
 }
 
-#[derive(Debug, ParseImpl, SkipSpace, Num, EnumAstImpl)]
-#[rule("{0:`[A-Za-z]+`!`int`}")]
+#[derive(Debug, ParseImpl, Num, EnumAstImpl)]
+#[regex(kw = r"int\b")]
+#[regex(alpha = r"[A-Za-z]+")]
+#[rule(!kw $0:alpha)]
 pub struct Id(String);
 
 #[cfg(test)]

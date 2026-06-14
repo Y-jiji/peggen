@@ -77,14 +77,12 @@ pub trait Num {
     fn num(rule: usize) -> usize;
 }
 
-pub trait SkipSpace {
-    #[inline(always)]
-    fn space(input: &str, end: usize) -> Result<usize, ()> {
-        for (delta, ch) in input[end..].char_indices() {
-            if !ch.is_whitespace() { return Ok(end+delta) }
-        }
-        return Ok(input.len())
+#[inline(always)]
+pub fn skip_whitespace(input: &str, end: usize) -> usize {
+    for (delta, ch) in input[end..].char_indices() {
+        if !ch.is_whitespace() { return end + delta }
     }
+    input.len()
 }
 
 #[inline(always)]
