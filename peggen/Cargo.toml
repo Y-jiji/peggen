@@ -1,8 +1,13 @@
 [package]
 name = "peggen"
-version = "0.1.0"
+version = "0.4.0"
 edition = "2024"
+description = "PEG parsers generated from annotated Rust enums and structs."
+license     = "MIT OR Apache-2.0"
+keywords    = ["parser-tools", "parser", "compiler"]
+repository  = "https://github.com/Y-jiji/peggen"
+readme      = "../README.md"
 
 [dependencies]
-peggen-core = { path = "../peggen-core" }
-peggen-macs = { path = "../peggen-macs" }
+peggen-core = { path = "../peggen-core", version = "0.4.0" }
+peggen-macs = { path = "../peggen-macs", version = "0.4.0" }
