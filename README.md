@@ -17,16 +17,27 @@ Peggen's syntax is macro-flavored.
 * `var = (exp ; init ; fold) sep *` parse and process with folding function `+` means at least once, `*` means zero or multiple, sep means separator
 * eliding `var =` forwards it to outer closure, for example `(exp)` parse as exp directly
     * inside a group `(exp ; closure)`, only types, fields and regexes pass values to the closure (a regex passes its matched `&str`); plain-text literals and `_` pass nothing
-* `exp |args| fields` at the end of a rule: every part passes its value to the closure in order (a type its value, a regex or plain-text literal its matched `&str`, a group its closure's result; `_` passes nothing), then `extra`; the closure returns the variant's fields as a tuple in field order
+* `exp |args| fields` at the end of a rule: every part passes its value to the closure in order (a type its value, a regex or plain-text literal its matched `&str`, a group its closure's result; `_` passes nothing), then `extra`; the closure returns the variant's fields: the value itself for a single-field variant, a tuple in field order otherwise
     * only a group changes how its parts are passed
 * an expression can be a type directly; a bare `Type` tries every variant in declaration order
 * `Type@{V1, V2, ...}` parse `Type` using only the rules of variants `V1, V2, ...`, tried in the listed order
 * `prefix % rest` if `prefix` matches, `rest` must match, otherwise the input is wrong (an error, not a backtrack); `%` splits the sequence it appears in
-* `#[peggen(extra = T)]` passes a value of type `T` to every closure as its last argument
+* `_` skips space
+
+Attributes: 
+* `#[peggen(extra = T)]` passes a value of type `T` to every closure as its last argument. 
+* `#[peggen(space = r"\s*")]` matching spaces. 
+* `#[parse(...)]` fills peggen expression. 
+* `#[error("..." : ...)]` is the fallback that `%` prefix matches. 
+    * message and pattern. 
+    * For a type after `%`, go through error branches of that type. 
+    * For a regex/literal after `%`, go through error branches after that variant. 
+    * If both fails, finally fall to next variant. 
+    * If it still fails, it is not recoverable. Raise error. 
 
 ## Algorithm
 
-Runtime: Try each variant's rule by order. If not matching, try next one. 
+Runtime (matching): Try each variant's rule by order. If not matching, try next one. 
 * For regex / literal str, match regex / literal str and record the span. 
 * For space, match space and skip the span. 
 * For repeat, match content and separator, record each span. Add an repeat tag on top. 
@@ -43,7 +54,7 @@ pub enum Json {
     Bool(bool),
     #[parse("{" % _0 = (
         "\"" _ r"[a-z]*" _ "\"" % ":" Json                                // kv pair
-        ; HashMap::new()                                                 // init
+        ; HashMap::new()                                                  // init
         ; |map, key: &str, value| { map.insert(key.to_string(), value); } // fold
     ) "," * "}")]
     Map(HashMap<String, Json>),
@@ -105,12 +116,12 @@ pub enum ArenaEx<'a> {
     Mul(&'a ArenaEx<'a>, &'a ArenaEx<'a>),
     #[parse(
         "(" % ArenaEx ")"
-        |_lpar, x, _rpar, bump| (bump.alloc(x),)
+        |_lpar, x, _rpar, bump| bump.alloc(x)
     )]
     Paren(&'a ArenaEx<'a>),
     #[parse(
         r"[0-9]+"
-        |x: &str, _bump| (x.parse::<usize>().unwrap(),)
+        |x: &str, _bump| x.parse::<usize>().unwrap()
     )]
     Num(usize),
 }
