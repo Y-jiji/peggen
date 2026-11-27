@@ -5,3 +5,5 @@ We call `Type@{V1, V2, V3}` a **variant group**.
 - Combined with the `Type`'s id `tix`, it is called `tgix`
 
 Inside `Matcher`, we use a `track` field to track every `tgix` in from function call. Before we push a new `tgix`, we examine whether there exists the same `tgix` on `track` with the same progress. If so, we treat it as a mismatch and try the next branch. 
+
+After its first match, such a call grows: it retries its variants with the match so far as their first element, until none eats more input.
