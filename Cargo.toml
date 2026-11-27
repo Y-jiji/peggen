@@ -1,4 +1,3 @@
 [workspace]
-members     = ["peggen","peggen-core", "peggen-macs", "peggen-examples"]
-exclude     = ["fuzz"]
-resolver    = "2"
+members     = ["peggen","peggen-core","peggen-macs"]
+resolver    = "3"
