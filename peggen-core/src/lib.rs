@@ -20,7 +20,8 @@ where
     Ty: Choice + Build<'a, Ex>,
 {
     let m = match Ty::choice(Matcher::new(input)) {
-        Ok(m) | Err(Fail::Miss(m) | Fail::Rest(m)) => m,
+        Ok(m) => m,
+        Err(Fail::Miss(m) | Fail::Rest(m)) => return Err(m.stop()),
         Err(Fail::Halt(error)) => return Err(error),
     };
     let (stack, error) = m.end()?;

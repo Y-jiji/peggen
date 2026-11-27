@@ -7,7 +7,7 @@ Peggen's syntax is macro-flavored.
 * `r"abc"` matching a regex (a raw string literal, follow regex grammar; write `r#"..."#` when the regex contains `"`)
 * without `r`, simple `"abc"` matches plain text
 * no `!` / `&` predicates; exclude keywords inside the regex (e.g. `r"int\b"`) and by variant order
-* whitespace (the `space` regex) is skipped automatically between adjacent elements; `_` between two elements means no whitespace there
+* whitespace (the `space` regex) is skipped automatically before, between and after the elements of each rule; `_` at one of these spots means no whitespace there
 * `var` parse and store as `var`
     * parse by default expression, follow the peggen expression binded to `var`'s type
 * `var = (exp)` parse and store as `var`
@@ -31,7 +31,7 @@ Attributes:
 * `#[peggen(extra = T)]` passes `&mut T` to every closure as its last argument. 
 * `#[peggen(space = r"\s*")]` matching spaces. 
     * without `space`, no whitespace is skipped
-* `#[parse(...)]` fills peggen expression. 
+* `#[parse(...)]` fills peggen expression: on each variant of an enum, or once on a struct for its single rule. 
 * `#[error("..." : ...)]` is the fallback that `%` prefix matches. 
     * message and pattern. 
     * For a type after `%`, go through error branches of that type. 

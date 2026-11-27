@@ -190,8 +190,13 @@ impl<'a> Matcher<'a> {
     /// With input left: `Err` with the failures, the last one saying where matching stopped.
     pub fn end(self) -> Result<(Vec<Tag<'a>>, Vec<Failure<'a>>), Vec<Failure<'a>>> {
         if !self.input.is_empty() {
-            return Err(self.note("parsing stops here").error);
+            return Err(self.stop());
         }
         Ok((self.stack, self.error))
+    }
+
+    /// Records "parsing stops here" at the front of the input and returns every failure.
+    pub(crate) fn stop(self) -> Vec<Failure<'a>> {
+        self.note("parsing stops here").error
     }
 }

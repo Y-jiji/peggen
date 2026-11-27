@@ -1,0 +1,11 @@
+[package]
+name    = "peggen-examples"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+peggen = { path = "../peggen" }
+
+[dev-dependencies]
+rand = "0.9"
