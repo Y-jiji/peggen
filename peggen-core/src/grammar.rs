@@ -1,15 +1,22 @@
-use crate::{Matcher, Reader, Rule, Snapshot};
+use crate::{Fail, Matcher, Reader, Rule, Snapshot};
 
-/// Phase 1 of the variant with declaration index `RULE`.
-/// `#[peggen]` implements it once per variant, `#[parse]` and `#[error]` alike.
+/// Phase 1 of the `#[parse]` variant with declaration index `RULE`.
 pub trait Match<const RULE: usize> {
-    /// This rule's global number; 
+    /// This rule's global number;
     /// Takes the next one from `Rule::next` on the first call and store static
     fn rule() -> Rule;
-    /// The closure for `scope`: matches the variant's pattern and decides whether to rewind to `snap`.
-    fn patt<'a>(m: Matcher<'a>, snap: Snapshot<'a>) -> Matcher<'a>;
-    /// Tries the `#[error]` variants after this variant, up to the next `#[parse]` variant, at the front of `m`.
-    fn recover<'a>(m: Matcher<'a>) -> Result<Matcher<'a>, Matcher<'a>>;
+    /// The closure for `scope`: matches the variant's pattern. Before returning `Miss` or `Rest` it rewinds to `snap`:
+    /// `Miss` for a miss before `%`, `Rest` for a failure after `%`.
+    fn patt<'a>(m: Matcher<'a>, snap: Snapshot<'a>) -> Result<Matcher<'a>, Fail<'a>>;
+}
+
+/// Phase 1 of the `#[error]` variant with declaration index `RULE`.
+pub trait Fault<const RULE: usize> {
+    /// This rule's global number; takes the next one from `Rule::next` on the first call.
+    fn rule() -> Rule;
+    /// The closure for `scope`: records the variant's message, then matches its pattern.
+    /// Before returning `Miss` it rewinds to `snap`.
+    fn patt<'a>(m: Matcher<'a>, snap: Snapshot<'a>) -> Result<Matcher<'a>, Fail<'a>>;
 }
 
 /// Phase 1 of a whole enum, for references that list no variants: a bare `Type`, and `parse::<Ty>`.
@@ -17,9 +24,16 @@ pub trait Choice {
     /// Variant names in declaration order; `Other@{X}` finds `X`'s index here at compile time.
     const VARIANTS: &'static [&'static str];
     /// Tries the `#[parse]` variants in declaration order.
-    fn choice<'a>(m: Matcher<'a>) -> Result<Matcher<'a>, Matcher<'a>>;
-    /// `choice`, then on a miss each `#[parse]` variant's `recover`: a bare `Type` after `%`.
-    fn expect<'a>(m: Matcher<'a>) -> Result<Matcher<'a>, Matcher<'a>>;
+    fn choice<'a>(m: Matcher<'a>) -> Result<Matcher<'a>, Fail<'a>>;
+}
+
+/// The `#[error]` side of a whole enum.
+pub trait Rescue {
+    /// Tries the `#[error]` variants after the `#[parse]` variant whose rule is `rule`,
+    /// up to the next `#[parse]` variant; `Miss` if none matches.
+    fn repair<'a>(m: Matcher<'a>, rule: Rule) -> Result<Matcher<'a>, Fail<'a>>;
+    /// Tries every `#[error]` variant in declaration order, for a bare `Type` after `%`; `Miss` if none matches.
+    fn rescue<'a>(m: Matcher<'a>) -> Result<Matcher<'a>, Fail<'a>>;
 }
 
 /// Phase 2 of a whole enum.
@@ -39,9 +53,27 @@ pub trait Make<'a, Ex, const RULE: usize>: Sized {
     fn make(reader: &mut Reader<'a>, extra: &mut Ex) -> Self;
 }
 
-/// Tries rule `RULE` of `Ty`: `m.scope(Ty::rule(), Ty::patt)`.
-pub fn attempt<'a, Ty: Match<RULE>, const RULE: usize>(m: Matcher<'a>) -> Result<Matcher<'a>, Matcher<'a>> {
-    m.scope(<Ty as Match<RULE>>::rule(), <Ty as Match<RULE>>::patt)
+/// Tries `#[parse]` variant `RULE` of `Ty`. On `Rest`, hands the variant's start to `Ty::repair`;
+/// if that returns `Miss`, halts with "no match after `%`, and no `#[error]` variant matched".
+pub fn attempt<'a, Ty: Match<RULE> + Rescue, const RULE: usize>(m: Matcher<'a>) -> Result<Matcher<'a>, Fail<'a>> {
+    let rule = <Ty as Match<RULE>>::rule();
+    match m.scope(rule, <Ty as Match<RULE>>::patt) {
+        Err(Fail::Rest(m)) => match Ty::repair(m, rule) {
+            Err(Fail::Miss(m) | Fail::Rest(m)) => Err(m.halt("no match after `%`, and no `#[error]` variant matched")),
+            other => other,
+        },
+        other => other,
+    }
+}
+
+/// Tries `#[error]` variant `RULE` of `Ty`: `m.scope(Ty::rule(), Ty::patt)`.
+pub fn fault<'a, Ty: Fault<RULE>, const RULE: usize>(m: Matcher<'a>) -> Result<Matcher<'a>, Fail<'a>> {
+    m.scope(<Ty as Fault<RULE>>::rule(), <Ty as Fault<RULE>>::patt)
+}
+
+/// A bare `Ty` after `%`: `Ty::choice`, then on `Miss` `Ty::rescue`.
+pub fn expect<'a, Ty: Choice + Rescue>(m: Matcher<'a>) -> Result<Matcher<'a>, Fail<'a>> {
+    Ty::choice(m).or_else(|fail| fail.or(Ty::rescue))
 }
 
 /// Index of variant `name` in `Ty::VARIANTS`; panics in const evaluation, so a wrong variant name fails to compile.

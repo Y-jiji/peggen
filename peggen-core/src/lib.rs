@@ -7,8 +7,8 @@ mod apply;
 
 pub use tag::{Tag, Rule};
 pub use report::Failure;
-pub use matcher::{Matcher, Snapshot};
-pub use grammar::{Match, Choice, Build, Make, attempt, index};
+pub use matcher::{Matcher, Snapshot, Fail};
+pub use grammar::{Match, Fault, Choice, Rescue, Build, Make, attempt, fault, expect, index};
 pub use reader::Reader;
 pub use apply::*;
 pub use regex::Regex;
@@ -19,7 +19,10 @@ pub fn parse<'a, Ty, Ex>(input: &'a str, extra: &mut Ex) -> Result<(Ty, Vec<Fail
 where
     Ty: Choice + Build<'a, Ex>,
 {
-    let m = Ty::choice(Matcher::new(input)).unwrap_or_else(|m| m);
+    let m = match Ty::choice(Matcher::new(input)) {
+        Ok(m) | Err(Fail::Miss(m) | Fail::Rest(m)) => m,
+        Err(Fail::Halt(error)) => return Err(error),
+    };
     let (stack, error) = m.end()?;
     let mut reader = Reader::new(stack);
     Ok((Ty::build(&mut reader, extra), error))
