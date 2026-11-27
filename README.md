@@ -45,7 +45,8 @@ Runtime (matching): Try each variant's rule by order. If not matching, try next 
 * For regex / literal str, match regex / literal str and record the span. 
 * For space, match space and skip the span. 
 * For repeat, match content and separator, record each span. Add an repeat tag on top. 
-* If matching rule and progress are both the same, but depth goes deeper, it is left recursion. Therefore, fail current rule immediately and try the next one. 
+* If matching rule and progress are both the same, but depth goes deeper, it is left recursion. Therefore, fail current rule immediately and try the next one.
+* After its first match, such a call grows: it retries the variants that start with its own type, with the match so far as their first element, and keeps the longer match, until none extends it. A failure after `%` while growing is not recovered. 
 * The whole input must be consumed: after the root type matches, the parser checks end of input.
 
 Runtime (errors): 

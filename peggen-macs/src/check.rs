@@ -1,11 +1,10 @@
 use crate::syntax::{Apply, Attr, Elem, Grammar, Seq};
 use quote::format_ident;
-use syn::{Ident, Path, Type};
+use syn::Ident;
 
 /// Turns a bare name that names a field into `Elem::Field`, numbers the regexes, and rejects with a spanned error:
 /// a regex that does not compile; an `@{…}` name that is not a `#[parse]` variant of this enum; a field bound twice
-/// or never; `var =` next to an end-of-rule closure; a `#[parse]` variant whose first element is its own enum.
-/// SADDLER: SHAME(TALLFUNC)
+/// or never; `var =` next to an end-of-rule closure. Left recursion is handled at runtime.
 pub fn check(grammar: &mut Grammar) -> syn::Result<()> {
     if let Some(param) = grammar.param.type_params().next() {
         return Err(syn::Error::new(param.ident.span(), "a peggen enum takes lifetime parameters only"));
@@ -31,15 +30,6 @@ pub fn check(grammar: &mut Grammar) -> syn::Result<()> {
         done?;
         let entry = &grammar.cases[case];
         let (Attr::Parse(body) | Attr::Error(_, body)) = &entry.attrs else { continue };
-        if let (Attr::Parse(_), Some(path)) = (&entry.attrs, first(&body.items)) {
-            if path.is_ident(&grammar.title) {
-                let text = format!(
-                    "left recursion is not supported yet: `{}` starts with `{}`",
-                    entry.title, grammar.title
-                );
-                return Err(syn::Error::new_spanned(path, text));
-            }
-        }
         let bound: Vec<&Ident> = body.items.front.iter().chain(body.items.after.iter().flatten())
             .filter_map(|elem| match elem {
                 Elem::Field(name, _) | Elem::Bound(name, _) => Some(name),
@@ -126,14 +116,4 @@ fn resolve(grammar: &Grammar, case: usize, seq: &mut Seq, top: bool, count: &mut
         }
     }
     Ok(())
-}
-
-/// The path of the type named by the first element of `seq`, looking into groups; for the left-recursion check.
-fn first(seq: &Seq) -> Option<&Path> {
-    match seq.front.iter().chain(seq.after.iter().flatten()).find(|elem| !matches!(elem, Elem::Glued))? {
-        Elem::Typed(path, _) => Some(path),
-        Elem::Field(_, Type::Path(ty)) => Some(&ty.path),
-        Elem::Bound(_, group) | Elem::Group(group) => first(&group.inner),
-        _ => None,
-    }
 }

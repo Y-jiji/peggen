@@ -34,7 +34,7 @@ fn header(grammar: &Grammar) -> (TokenStream, TokenStream, Lifetime, TokenStream
     (quote!(#ig), quote!(#tg #wc), input, extra)
 }
 
-/// `Build::build`: takes the `Rule` tag, compares it with every variant's `rule()`, calls that `Make`, seeks to `stop`.
+/// `Build::build`: takes the `Rule` tag, compares it with every variant's `rule()`, and calls that `Make`.
 fn dispatch(grammar: &Grammar) -> TokenStream {
     let (ig, tg, input, extra) = header(grammar);
     let title = &grammar.title;
@@ -55,10 +55,8 @@ fn dispatch(grammar: &Grammar) -> TokenStream {
     quote! {
         impl #ig ::peggen::Build<#input, #extra> for #title #tg {
             fn build(reader: &mut ::peggen::Reader<#input>, extra: &mut #extra) -> Self {
-                let (rule, stop) = reader.rule();
-                let value = #(#arms)* { ::core::panic!("peggen: {:?} is not a rule of {}", rule, #name) };
-                reader.seek(stop);
-                value
+                let rule = reader.rule();
+                #(#arms)* { ::core::panic!("peggen: {:?} is not a rule of {}", rule, #name) }
             }
         }
     }

@@ -5,10 +5,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub enum Tag<'a> {
     /// A regex match: the matched slice.
     Text(&'a str),
-    /// One `scope`: its rule, and the index one past its last inner tag.
-    Rule { rule: Rule, stop: usize },
-    /// One `repeat`: how many items matched.
-    Many { count: usize },
+    /// One `scope`: its rule. Read before its inner tags, pushed after them.
+    Rule(Rule),
+    /// One `repeat`: how many items matched. Read before the items, pushed after them.
+    Many(usize),
 }
 
 /// A global rule number. Each rule takes one from `RULE_COUNT` on its first call.

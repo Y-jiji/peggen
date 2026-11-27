@@ -1,4 +1,5 @@
 mod tag;
+mod chain;
 mod report;
 mod matcher;
 mod grammar;
@@ -7,8 +8,8 @@ mod apply;
 
 pub use tag::{Tag, Rule};
 pub use report::Failure;
-pub use matcher::{Matcher, Snapshot, Fail};
-pub use grammar::{Match, Fault, Choice, Rescue, Build, Make, attempt, fault, expect, index};
+pub use matcher::{Matcher, Snapshot, Fail, Key};
+pub use grammar::{Match, Fault, Choice, Rescue, Build, Make, attempt, fault, expect, enter, grow, index};
 pub use reader::Reader;
 pub use apply::*;
 pub use regex::Regex;

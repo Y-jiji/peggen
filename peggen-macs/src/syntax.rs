@@ -43,12 +43,14 @@ pub struct Body {
 }
 
 /// A sequence; `%` splits it into the part before and the part after.
+#[derive(Clone)]
 pub struct Seq {
     pub front: Vec<Elem>,
     pub after: Option<Vec<Elem>>,
 }
 
 /// One element of a sequence.
+#[derive(Clone)]
 pub enum Elem {
     /// `"abc"`: plain text.
     Plain(LitStr),
@@ -67,12 +69,14 @@ pub enum Elem {
 }
 
 /// A parenthesized group and what is done with its values.
+#[derive(Clone)]
 pub struct Group {
     pub inner: Seq,
     pub apply: Apply,
 }
 
 /// What a group does with its values.
+#[derive(Clone)]
 pub enum Apply {
     /// `(exp)`: passes them on.
     Plain,
@@ -85,6 +89,7 @@ pub enum Apply {
 }
 
 /// `(exp ; init ; fold) sep *` or `+`.
+#[derive(Clone)]
 pub struct Fold {
     pub start: Expr,
     pub merge: Expr,

@@ -112,6 +112,7 @@ fn element(grammar: &Grammar, elem: &Elem, after: bool) -> TokenStream {
                 None if after => quote!(::peggen::expect::<#ty>(m)),
                 None => quote!(<#ty as ::peggen::Choice>::choice(m)),
                 Some((head, tail)) => {
+                    let all = names.iter().map(&index);
                     let head = index(head);
                     let tries = tail.iter().map(&index).map(|i| quote! {
                         .or_else(|fail| fail.or(::peggen::attempt::<#ty, #i>))
@@ -121,7 +122,11 @@ fn element(grammar: &Grammar, elem: &Elem, after: bool) -> TokenStream {
                             <#ty as ::peggen::Rescue>::repair(m, <#ty as ::peggen::Match<#i>>::rule())
                         }))
                     });
-                    quote!(::peggen::attempt::<#ty, #head>(m) #(#tries)* #(#fixes)*)
+                    quote! {
+                        ::peggen::enter::<#ty>(m, &[#(#all),*], |m: ::peggen::Matcher<'peggen>| -> #out {
+                            ::peggen::attempt::<#ty, #head>(m) #(#tries)*
+                        }) #(#fixes)*
+                    }
                 }
             }
         }
@@ -147,7 +152,9 @@ fn element(grammar: &Grammar, elem: &Elem, after: bool) -> TokenStream {
     quote! { let m = #step #rest?; }
 }
 
-/// `Choice::choice`, `Rescue::repair` and `Rescue::rescue`, as `or_else` chains.
+/// `Choice::key`, `Choice::space`, `Choice::choice` through `enter`, `Choice::round`, `Rescue::repair` and
+/// `Rescue::rescue`.
+/// SADDLER: SHAME(TALLFUNC)
 fn choice(grammar: &Grammar) -> TokenStream {
     let title = &grammar.title;
     let (ig, tg, wc) = grammar.param.split_for_impl();
@@ -181,11 +188,62 @@ fn choice(grammar: &Grammar) -> TokenStream {
         let case = Literal::usize_unsuffixed(case);
         quote!(if rule == <Self as ::peggen::Match<#case>>::rule() { return #body; })
     });
+    let space = match grammar.setup.space {
+        Some(_) => quote!(::core::option::Option::Some(&*PEGGEN_SPACE)),
+        None => quote!(::core::option::Option::None),
+    };
+    let parse = kinds(false).into_iter().map(Literal::usize_unsuffixed);
+    let arms: Vec<TokenStream> = kinds(false).into_iter().filter_map(|case| {
+        let Attr::Parse(body) = &grammar.cases[case].attrs else { return None };
+        let (heads, tail) = left(grammar, &body.items)?;
+        let steps = sequence(grammar, &tail, true);
+        let heads = heads.into_iter().map(Literal::usize_unsuffixed);
+        let case = Literal::usize_unsuffixed(case);
+        Some(quote! {
+            #case if false #(|| seed == <Self as ::peggen::Match<#heads>>::rule())* => ::peggen::grow::<Self, #case>(
+                m, call, |m: ::peggen::Matcher<'peggen>| -> #out { #steps ::core::result::Result::Ok(m) },
+            ),
+        })
+    }).collect();
+    let round = if arms.is_empty() {
+        quote!(::core::result::Result::Err(::peggen::Fail::Miss(m)))
+    } else {
+        quote! {
+            let mut m = m;
+            for &case in set {
+                let step = match case {
+                    #(#arms)*
+                    _ => continue,
+                };
+                match step {
+                    ::core::result::Result::Err(::peggen::Fail::Miss(back)) => m = back,
+                    other => return other,
+                }
+            }
+            ::core::result::Result::Err(::peggen::Fail::Miss(m))
+        }
+    };
     quote! {
         impl #ig ::peggen::Choice for #title #tg #wc {
             const VARIANTS: &'static [&'static str] = &[#(#names),*];
+            fn key() -> ::peggen::Key {
+                static KEY: ::std::sync::LazyLock<::peggen::Key> = ::std::sync::LazyLock::new(::peggen::Key::next);
+                *KEY
+            }
+            fn space() -> ::core::option::Option<&'static ::peggen::Regex> {
+                #space
+            }
             fn choice<'peggen>(m: ::peggen::Matcher<'peggen>) -> #out {
-                #choose
+                ::peggen::enter::<Self>(m, &[#(#parse),*], |m: ::peggen::Matcher<'peggen>| -> #out { #choose })
+            }
+            #[allow(unused_variables)]
+            fn round<'peggen>(
+                m: ::peggen::Matcher<'peggen>,
+                call: ::peggen::Snapshot<'peggen>,
+                seed: ::peggen::Rule,
+                set: &[usize],
+            ) -> #out {
+                #round
             }
         }
         impl #ig ::peggen::Rescue for #title #tg #wc {
@@ -199,4 +257,36 @@ fn choice(grammar: &Grammar) -> TokenStream {
             }
         }
     }
+}
+
+/// If `seq` starts with this enum, directly or inside a plain or closure group: the variants that first element
+/// accepts, and `seq` without it.
+fn left(grammar: &Grammar, seq: &Seq) -> Option<(Vec<usize>, Seq)> {
+    let mut rest = seq.clone();
+    let list = if rest.front.iter().any(|elem| !matches!(elem, Elem::Glued)) {
+        &mut rest.front
+    } else {
+        rest.after.as_mut()?
+    };
+    let at = list.iter().position(|elem| !matches!(elem, Elem::Glued))?;
+    let (heads, drop) = match &mut list[at] {
+        Elem::Typed(path, names) if path.is_ident(&grammar.title) => {
+            let heads: Vec<usize> = if names.is_empty() {
+                (0..grammar.cases.len()).filter(|&case| matches!(grammar.cases[case].attrs, Attr::Parse(_))).collect()
+            } else {
+                names.iter().filter_map(|name| grammar.cases.iter().position(|case| case.title == *name)).collect()
+            };
+            (heads, true)
+        }
+        Elem::Bound(_, group) | Elem::Group(group) if matches!(group.apply, Apply::Plain | Apply::Close(_)) => {
+            let (heads, inner) = left(grammar, &group.inner)?;
+            group.inner = inner;
+            (heads, false)
+        }
+        _ => return None,
+    };
+    if drop {
+        list.remove(at);
+    }
+    Some((heads, rest))
 }
