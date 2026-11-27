@@ -7,7 +7,7 @@ pub enum Tag<'a> {
     /// A regex match: the matched slice.
     Text(&'a str),
     /// One variant's match: its `TVIx`. Read before its inner tags, pushed after them.
-    Rule(TVIx),
+    Variant(TVIx),
     /// One `repeat`: how many items matched. Read before the items, pushed after them.
     Many(usize),
 }

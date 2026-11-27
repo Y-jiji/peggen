@@ -3,11 +3,32 @@ use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{Expr, Fields, Ident, Lifetime};
 
-/// Phase 2: `Make` per variant and `Build`.
+/// Phase 2: `impl Assemble`, whose `assemble` takes the `Variant` tag through `assembler.variant()`, panics unless its
+/// `TIx` is this one, and runs the `arm` of its `VIx` through one `match` over `vix().0`.
 pub fn emit(grammar: &Grammar) -> TokenStream {
-    let makes = (0..grammar.cases.len()).map(|case| make(grammar, case));
-    let dispatch = dispatch(grammar);
-    quote! { #(#makes)* #dispatch }
+    let (ig, tg, input, extra) = header(grammar);
+    let title = &grammar.title;
+    let arms = (0..grammar.cases.len()).filter(|&case| !matches!(grammar.cases[case].attrs, Attr::Empty)).map(|case| {
+        let body = arm(grammar, case);
+        let case = Literal::u16_unsuffixed(case as u16);
+        quote! { #case => #body, }
+    });
+    let name = title.to_string();
+    quote! {
+        impl #ig ::peggen::Assemble<#input, #extra> for #title #tg {
+            #[allow(unused_variables)]
+            fn assemble(assembler: &mut ::peggen::Assembler<#input>, extra: &mut #extra) -> Self {
+                let variant = assembler.variant();
+                if variant.tix() != <Self as ::peggen::Match>::tix() {
+                    ::core::panic!("peggen: {:?} is not a variant of {}", variant, #name);
+                }
+                match variant.vix().0 {
+                    #(#arms)*
+                    _ => ::core::panic!("peggen: {:?} is not a variant of {}", variant, #name),
+                }
+            }
+        }
+    }
 }
 
 /// Phase 2 impl generics, type generics with the where clause, the input lifetime, and the extra type.
@@ -34,45 +55,14 @@ fn header(grammar: &Grammar) -> (TokenStream, TokenStream, Lifetime, TokenStream
     (quote!(#ig), quote!(#tg #wc), input, extra)
 }
 
-/// `Build::build`: takes the `Rule` tag, panics unless its `TIx` is this one, and calls `Make<…, VIX>` for its `VIx`
-/// through one `match` over `vix().0`. Generated code reads through `assembler: &mut ::peggen::Assembler`.
-fn dispatch(grammar: &Grammar) -> TokenStream {
-    let (ig, tg, input, extra) = header(grammar);
-    let title = &grammar.title;
-    let arms = grammar.cases.iter().enumerate().filter_map(|(case, entry)| {
-        if matches!(entry.attrs, Attr::Empty) {
-            return None;
-        }
-        let case = Literal::usize_unsuffixed(case);
-        Some(quote! { #case => <Self as ::peggen::Make<#input, #extra, #case>>::make(assembler, &mut *extra), })
-    });
-    let name = title.to_string();
-    quote! {
-        impl #ig ::peggen::Build<#input, #extra> for #title #tg {
-            fn build(assembler: &mut ::peggen::Assembler<#input>, extra: &mut #extra) -> Self {
-                let rule = assembler.rule();
-                if rule.tix() != <Self as ::peggen::Match>::tix() {
-                    ::core::panic!("peggen: {:?} is not a variant of {}", rule, #name);
-                }
-                match rule.vix().0 {
-                    #(#arms)*
-                    _ => ::core::panic!("peggen: {:?} is not a variant of {}", rule, #name),
-                }
-            }
-        }
-    }
-}
-
-/// `Make::make` for one case: reads its parts in order, then builds the variant, or the struct when `alone`,
-/// from bindings or the closure.
-fn make(grammar: &Grammar, case: usize) -> TokenStream {
+/// One case's arm of `assemble`: reads its parts in order, then builds the variant, or the struct when `alone`, from
+/// bindings or the closure. Empty for a case without `#[parse]` or `#[error]`.
+fn arm(grammar: &Grammar, case: usize) -> TokenStream {
     let entry = &grammar.cases[case];
     let body = match &entry.attrs {
         Attr::Parse(body) | Attr::Error(_, body) => body,
         Attr::Empty => return TokenStream::new(),
     };
-    let (ig, tg, input, extra) = header(grammar);
-    let (title, variant) = (&grammar.title, &entry.title);
     let mut names = Vec::new();
     let reads: TokenStream = body.items.front.iter().chain(body.items.after.iter().flatten())
         .map(|elem| element(grammar, elem, false, &mut names))
@@ -88,26 +78,22 @@ fn make(grammar: &Grammar, case: usize) -> TokenStream {
             many => quote!(let (#(#many),*) = #call;),
         }
     });
-    let path = if grammar.alone { quote!(Self) } else { quote!(Self::#variant) };
+    let title = &entry.title;
+    let path = if grammar.alone { quote!(Self) } else { quote!(Self::#title) };
     let build = match &entry.shape {
         Fields::Named(_) => quote!(#path { #(#fields),* }),
         Fields::Unnamed(_) => quote!(#path(#(#fields),*)),
         Fields::Unit => quote!(#path),
     };
-    let case = Literal::usize_unsuffixed(case);
-    quote! {
-        impl #ig ::peggen::Make<#input, #extra, #case> for #title #tg {
-            #[allow(unused_variables)]
-            fn make(assembler: &mut ::peggen::Assembler<#input>, extra: &mut #extra) -> Self {
-                #reads
-                #values
-                #build
-            }
-        }
-    }
+    quote!({
+        #reads
+        #values
+        #build
+    })
 }
 
-/// Statements that read one element's tags; pushes the names of the values it passes onto `names`.
+/// Statements that read one element's tags; pushes the names of the values it passes onto `names`. A type is read
+/// through `Assemble::assemble`.
 /// SADDLER: SHAME(TALLFUNC)
 fn element(grammar: &Grammar, elem: &Elem, group: bool, names: &mut Vec<Ident>) -> TokenStream {
     let (_, _, input, extra) = header(grammar);
@@ -119,10 +105,10 @@ fn element(grammar: &Grammar, elem: &Elem, group: bool, names: &mut Vec<Ident>) 
         Elem::Regex(..) => quote!(assembler.text()),
         Elem::Typed(path, _) => {
             let ty = if path.is_ident(&grammar.title) { quote!(Self) } else { quote!(#path) };
-            quote!(<#ty as ::peggen::Build<#input, #extra>>::build(assembler, &mut *extra))
+            quote!(<#ty as ::peggen::Assemble<#input, #extra>>::assemble(assembler, &mut *extra))
         }
         Elem::Field(name, ty) => {
-            let read = quote!(<#ty as ::peggen::Build<#input, #extra>>::build(assembler, &mut *extra));
+            let read = quote!(<#ty as ::peggen::Assemble<#input, #extra>>::assemble(assembler, &mut *extra));
             if !group {
                 return quote! { let #name = #read; };
             }

@@ -148,9 +148,9 @@ impl<'a> Matcher<'a> {
         self
     }
 
-    /// Pushes `rule`'s tag linked before every tag since `base`, so the variant becomes their parent.
-    fn adopt(mut self, rule: TVIx, base: Snapshot<'a>) -> Self {
-        self.stack.push(Tag::Rule(rule), base.stack);
+    /// Pushes `variant`'s tag linked before every tag since `base`, so the variant becomes their parent.
+    fn adopt(mut self, variant: TVIx, base: Snapshot<'a>) -> Self {
+        self.stack.push(Tag::Variant(variant), base.stack);
         self
     }
 

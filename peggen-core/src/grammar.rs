@@ -20,21 +20,14 @@ pub trait Match {
     fn variant<'a>(m: Matcher<'a>, vix: VIx, first: Option<VIx>) -> Failable<'a>;
 }
 
-/// Phase 2 of a whole type.
-/// With `extra = T`, `#[peggen]` implements `Build<'a, T>`; without it, `Build<'a, Ex>` for every `Ex`.
-pub trait Build<'a, Ex>: Sized {
-    /// Takes the next `Rule` tag and calls the `Make` of its `vix`. Panics if its `tix` is not this one.
+/// Phase 2 of a peggen type.
+/// With `extra = T`, `#[peggen]` implements `Assemble<'a, T>`; without it, `Assemble<'a, Ex>` for every `Ex`.
+pub trait Assemble<'a, Ex>: Sized {
+    /// Takes the next `Variant` tag, panics if its `tix` is not this one, then reads the tags of the variant with its
+    /// `vix`, runs the closures in input order, and returns the variant. With `extra` declared, every closure gets
+    /// `&mut *extra` as its last argument.
     /// Caller obligation: the next tag was pushed for one of this type's variants.
-    fn build(assembler: &mut Assembler<'a>, extra: &mut Ex) -> Self;
-}
-
-/// Phase 2 of the variant `VIx(VIX)`.
-/// `#[peggen]` implements it once per variant, `#[parse]` and `#[error]` alike.
-pub trait Make<'a, Ex, const VIX: u16>: Sized {
-    /// Reads the variant's tags after its `Rule` tag, runs the closures in input order, and returns the variant.
-    /// With `extra` declared, every closure gets `&mut *extra` as its last argument.
-    /// Caller obligation: only `Build::build` calls it, right after taking the variant's `Rule` tag.
-    fn make(assembler: &mut Assembler<'a>, extra: &mut Ex) -> Self;
+    fn assemble(assembler: &mut Assembler<'a>, extra: &mut Ex) -> Self;
 }
 
 /// The `VIx` of variant `name` in `Ty::VARIANTS`; panics in const evaluation, so a wrong variant name fails to compile.

@@ -12,20 +12,20 @@ impl<'a> Assembler<'a> {
         Assembler { stack, place: 0 }
     }
 
-    /// Takes a `Rule` tag and returns its `TVIx`. Panics on another tag or past the end.
-    /// Caller obligation: generated `build` takes tags in reading order, the order phase 1 matched them.
-    pub fn rule(&mut self) -> TVIx {
+    /// Takes a `Variant` tag and returns its `TVIx`. Panics on another tag or past the end.
+    /// Caller obligation: generated `assemble` takes tags in reading order, the order phase 1 matched them.
+    pub fn variant(&mut self) -> TVIx {
         match self.stack.get(self.place) {
-            Some(&Tag::Rule(rule)) => {
+            Some(&Tag::Variant(variant)) => {
                 self.place += 1;
-                rule
+                variant
             }
-            other => panic!("peggen: expected a rule tag at {}, found {:?}", self.place, other),
+            other => panic!("peggen: expected a variant tag at {}, found {:?}", self.place, other),
         }
     }
 
     /// Takes a `Text` tag and returns its text. Panics on another tag or past the end.
-    /// Caller obligation: generated `build` takes tags in reading order, the order phase 1 matched them.
+    /// Caller obligation: generated `assemble` takes tags in reading order, the order phase 1 matched them.
     pub fn text(&mut self) -> &'a str {
         match self.stack.get(self.place) {
             Some(&Tag::Text(text)) => {
@@ -37,7 +37,7 @@ impl<'a> Assembler<'a> {
     }
 
     /// Takes a `Many` tag and returns its item count. Panics on another tag or past the end.
-    /// Caller obligation: generated `build` takes tags in reading order, the order phase 1 matched them.
+    /// Caller obligation: generated `assemble` takes tags in reading order, the order phase 1 matched them.
     pub fn many(&mut self) -> usize {
         match self.stack.get(self.place) {
             Some(&Tag::Many(count)) => {
