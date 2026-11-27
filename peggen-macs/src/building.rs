@@ -34,29 +34,30 @@ fn header(grammar: &Grammar) -> (TokenStream, TokenStream, Lifetime, TokenStream
     (quote!(#ig), quote!(#tg #wc), input, extra)
 }
 
-/// `Build::build`: takes the `Rule` tag, compares it with every variant's `rule()`, and calls that `Make`.
+/// `Build::build`: takes the `Rule` tag, panics unless its `TIx` is this one, and calls `Make<…, VIX>` for its `VIx`
+/// through one `match` over `vix().0`. Generated code reads through `assembler: &mut ::peggen::Assembler`.
 fn dispatch(grammar: &Grammar) -> TokenStream {
     let (ig, tg, input, extra) = header(grammar);
     let title = &grammar.title;
     let arms = grammar.cases.iter().enumerate().filter_map(|(case, entry)| {
-        let kind = match entry.attrs {
-            Attr::Parse(_) => quote!(Match),
-            Attr::Error(..) => quote!(Fault),
-            Attr::Empty => return None,
-        };
+        if matches!(entry.attrs, Attr::Empty) {
+            return None;
+        }
         let case = Literal::usize_unsuffixed(case);
-        Some(quote! {
-            if rule == <Self as ::peggen::#kind<#case>>::rule() {
-                <Self as ::peggen::Make<#input, #extra, #case>>::make(reader, &mut *extra)
-            } else
-        })
+        Some(quote! { #case => <Self as ::peggen::Make<#input, #extra, #case>>::make(assembler, &mut *extra), })
     });
     let name = title.to_string();
     quote! {
         impl #ig ::peggen::Build<#input, #extra> for #title #tg {
-            fn build(reader: &mut ::peggen::Reader<#input>, extra: &mut #extra) -> Self {
-                let rule = reader.rule();
-                #(#arms)* { ::core::panic!("peggen: {:?} is not a rule of {}", rule, #name) }
+            fn build(assembler: &mut ::peggen::Assembler<#input>, extra: &mut #extra) -> Self {
+                let rule = assembler.rule();
+                if rule.tix() != <Self as ::peggen::Match>::tix() {
+                    ::core::panic!("peggen: {:?} is not a variant of {}", rule, #name);
+                }
+                match rule.vix().0 {
+                    #(#arms)*
+                    _ => ::core::panic!("peggen: {:?} is not a variant of {}", rule, #name),
+                }
             }
         }
     }
@@ -97,7 +98,7 @@ fn make(grammar: &Grammar, case: usize) -> TokenStream {
     quote! {
         impl #ig ::peggen::Make<#input, #extra, #case> for #title #tg {
             #[allow(unused_variables)]
-            fn make(reader: &mut ::peggen::Reader<#input>, extra: &mut #extra) -> Self {
+            fn make(assembler: &mut ::peggen::Assembler<#input>, extra: &mut #extra) -> Self {
                 #reads
                 #values
                 #build
@@ -115,13 +116,13 @@ fn element(grammar: &Grammar, elem: &Elem, group: bool, names: &mut Vec<Ident>) 
         Elem::Glued => return TokenStream::new(),
         Elem::Plain(_) if group => return TokenStream::new(),
         Elem::Plain(text) => quote!(#text),
-        Elem::Regex(..) => quote!(reader.text()),
+        Elem::Regex(..) => quote!(assembler.text()),
         Elem::Typed(path, _) => {
             let ty = if path.is_ident(&grammar.title) { quote!(Self) } else { quote!(#path) };
-            quote!(<#ty as ::peggen::Build<#input, #extra>>::build(reader, &mut *extra))
+            quote!(<#ty as ::peggen::Build<#input, #extra>>::build(assembler, &mut *extra))
         }
         Elem::Field(name, ty) => {
-            let read = quote!(<#ty as ::peggen::Build<#input, #extra>>::build(reader, &mut *extra));
+            let read = quote!(<#ty as ::peggen::Build<#input, #extra>>::build(assembler, &mut *extra));
             if !group {
                 return quote! { let #name = #read; };
             }
@@ -146,7 +147,7 @@ fn element(grammar: &Grammar, elem: &Elem, group: bool, names: &mut Vec<Ident>) 
                 Apply::Maybe(close) => {
                     let call = apply(grammar, close, &[quote!(found)]);
                     quote!({
-                        let found = if reader.many() == 1 {
+                        let found = if assembler.many() == 1 {
                             #reads
                             ::core::option::Option::Some(#tuple)
                         } else {
@@ -163,7 +164,7 @@ fn element(grammar: &Grammar, elem: &Elem, group: bool, names: &mut Vec<Ident>) 
                     args.extend(values.iter().cloned());
                     let call = apply(grammar, merge, &args);
                     quote!({
-                        let count = reader.many();
+                        let count = assembler.many();
                         let mut acc = #start;
                         for index in 0..count {
                             if index > 0 { #delim }

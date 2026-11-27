@@ -1,4 +1,4 @@
-use peggen::{peggen, Failure};
+use peggen::{peggen, Message};
 
 /// The README calculator: `+` and `-` bind looser than `*` and `/`; all four associate to the left.
 #[peggen(space = r"\s*")]
@@ -26,13 +26,19 @@ pub enum CalcEx {
     Div(Box<CalcEx>, Box<CalcEx>),
     #[parse("(" % _0 = (CalcEx ; Box::new) ")")]
     Paren(Box<CalcEx>),
+    #[error("unclosed parenthesis" : "(" r"[^)]*")]
+    Unclosed,
     #[parse(_0 = (r"[0-9]+" ; |x: &str| x.parse::<usize>().unwrap()))]
     Num(usize),
 }
 
-/// Parses an arithmetic expression; on failure, returns the failures, the last one saying where parsing stopped.
-pub fn parse(input: &str) -> Result<CalcEx, Vec<Failure<'_>>> {
-    peggen::parse::<CalcEx, ()>(input, &mut ()).map(|(tree, _)| tree)
+/// Parses an arithmetic expression. On any failure, returns every message: each unclosed parenthesis
+/// that was skipped, and the one that stopped parsing, if any.
+pub fn parse(input: &str) -> Result<CalcEx, Vec<Message<'_>>> {
+    match peggen::parse::<CalcEx, ()>(input, &mut ()) {
+        Ok((tree, messages)) if messages.is_empty() => Ok(tree),
+        Ok((_, messages)) | Err(messages) => Err(messages),
+    }
 }
 
 #[cfg(test)]
@@ -61,6 +67,16 @@ mod correct {
         for input in ["1+", "*1", "1 2", "(1", ""] {
             assert!(parse(input).is_err(), "{input:?}");
         }
+    }
+
+    /// `1*(2` recovers to `Mul(Num(1), Unclosed)`, with "unclosed parenthesis" at 1:3.
+    #[test]
+    fn recovery() {
+        let input = "1*(2";
+        let (tree, messages) = peggen::parse::<CalcEx, ()>(input, &mut ()).expect("recovers");
+        assert_eq!(tree, CalcEx::Mul(Box::new(CalcEx::Num(1)), Box::new(CalcEx::Unclosed)));
+        let found: Vec<_> = messages.iter().map(|message| (message.locate(input), message.text)).collect();
+        assert_eq!(found, [((1, 3), "unclosed parenthesis")]);
     }
 
     /// 2000 pseudo-random trees, printed with random spaces, parse back equal.
@@ -110,6 +126,7 @@ mod correct {
                 return;
             }
             CalcEx::Num(value) => return out.push_str(&value.to_string()),
+            CalcEx::Unclosed => unreachable!("`random` never builds error variants"),
         };
         print(left, rng, out);
         space(rng, out);

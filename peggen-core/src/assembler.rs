@@ -1,20 +1,20 @@
-use crate::{Rule, Tag};
+use crate::{Tag, TVIx};
 
-/// Phase 2 state: hands out tags from the front.
-pub struct Reader<'a> {
+/// Phase 2 state, finalized from a `Matcher` by `Failable::end`: hands out tags from the front.
+pub struct Assembler<'a> {
     stack: Vec<Tag<'a>>,
     place: usize,
 }
 
-impl<'a> Reader<'a> {
+impl<'a> Assembler<'a> {
     /// Starts at the first tag of `stack`.
-    pub(crate) fn new(stack: Vec<Tag<'a>>) -> Self {
-        Reader { stack, place: 0 }
+    pub fn new(stack: Vec<Tag<'a>>) -> Self {
+        Assembler { stack, place: 0 }
     }
 
-    /// Takes a `Rule` tag and returns its rule. Panics on another tag or past the end.
-    /// Caller obligation: generated `build` takes tags in reading order, the order `patt` matched them.
-    pub fn rule(&mut self) -> Rule {
+    /// Takes a `Rule` tag and returns its `TVIx`. Panics on another tag or past the end.
+    /// Caller obligation: generated `build` takes tags in reading order, the order phase 1 matched them.
+    pub fn rule(&mut self) -> TVIx {
         match self.stack.get(self.place) {
             Some(&Tag::Rule(rule)) => {
                 self.place += 1;
@@ -25,7 +25,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Takes a `Text` tag and returns its text. Panics on another tag or past the end.
-    /// Caller obligation: generated `build` takes tags in reading order, the order `patt` matched them.
+    /// Caller obligation: generated `build` takes tags in reading order, the order phase 1 matched them.
     pub fn text(&mut self) -> &'a str {
         match self.stack.get(self.place) {
             Some(&Tag::Text(text)) => {
@@ -37,7 +37,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Takes a `Many` tag and returns its item count. Panics on another tag or past the end.
-    /// Caller obligation: generated `build` takes tags in reading order, the order `patt` matched them.
+    /// Caller obligation: generated `build` takes tags in reading order, the order phase 1 matched them.
     pub fn many(&mut self) -> usize {
         match self.stack.get(self.place) {
             Some(&Tag::Many(count)) => {

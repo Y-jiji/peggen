@@ -7,8 +7,8 @@ use proc_macro::TokenStream;
 
 /// `#[peggen(space = r"…", extra = T)]` on an enum whose variants carry `#[parse(…)]` or `#[error("…" : …)]`,
 /// or on a struct that carries one `#[parse(…)]` after `#[peggen]`.
-/// Emits the item without those attributes, then `Match` / `Fault` per case, `Choice`, `Rescue`,
-/// `Make` per variant and `Build`, inside one `const _: () = { … };` block.
+/// Emits the item without those attributes, then `Match`, `Make` per variant and `Build`,
+/// inside one `const _: () = { … };` block.
 #[proc_macro_attribute]
 pub fn peggen(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut item = syn::parse_macro_input!(item as syn::Item);

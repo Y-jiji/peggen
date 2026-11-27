@@ -1,119 +1,84 @@
 use crate::chain::{self, Chain};
-use crate::{Failure, Regex, Rule, Tag};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::{Assembler, GIx, Match, Message, MessageKind, Regex, Tag, TGIx, TVIx, VIx};
+use std::sync::OnceLock;
 
-/// Phase 1 state. Operations return `Ok` when the element matched and `Err` with a `Fail` when it did not.
+/// Phase 1 state. Each method for an element of a flat rule returns `Failable`.
 pub struct Matcher<'a> {
     /// Tags so far, parent before children.
     stack: Chain<Tag<'a>>,
-    /// Explicit failures, in the order they were recorded.
-    error: Vec<Failure<'a>>,
+    /// Messages, in the order they were recorded.
+    error: Vec<Message<'a>>,
     /// The input not yet matched.
     input: &'a str,
-    /// Calls of enums still running, outermost first; for loop detection. Rewinding leaves it alone.
-    trace: Vec<Call>,
+    /// Calls of variant groups still running, outermost first; for loop detection. Rewinding leaves it alone.
+    track: Vec<Call>,
 }
 
-/// An enum's identity for loop detection. Each enum takes one from `KEY_COUNT` on its first call.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Key(usize);
-
-/// The next free loop-detection key.
-static KEY_COUNT: AtomicUsize = AtomicUsize::new(0);
-
-impl Key {
-    /// Takes the next number from `KEY_COUNT`.
-    pub fn next() -> Key {
-        Key(KEY_COUNT.fetch_add(1, Ordering::Relaxed))
-    }
-}
-
-/// One running call of an enum.
+/// One running call of a variant group; 16 bytes.
 struct Call {
-    /// The enum's `Choice::key`.
-    title: Key,
-    /// Input left when the call started.
+    /// The type and the ordered variants this call tries.
+    group: TGIx,
+    /// Input left where it started, measured after the type's spaces.
     place: usize,
-    /// A call of the same enum at the same position happened inside: grow after the first match.
+    /// A call of the same group started at the same position inside it, so it grows after the first match.
     found: bool,
 }
 
-/// Why matching stopped.
-pub enum Fail<'a> {
-    /// No match here; the caller tries its next alternative.
-    Miss(Matcher<'a>),
-    /// The rest after `%` failed and `patt` rewound to the variant's start; `attempt` tries its `#[error]` variants.
-    Rest(Matcher<'a>),
-    /// Unrecoverable: every failure recorded so far, the halt's message last. No matcher is left to go on with.
-    Halt(Vec<Failure<'a>>),
+/// The state after matching. Every state carries the matcher, so the caller can always rewind or go on.
+pub enum Failable<'a> {
+    /// Matched; the next element goes on from here.
+    Success(Matcher<'a>),
+    /// No match before `%`; the choice rewinds and tries the next variant.
+    Mismatch(Matcher<'a>),
+    /// An element after `%` failed, or a part returned `Failure`; the choice tries the `#[error]` variants after it.
+    Failure(Matcher<'a>),
+    /// No `#[error]` variant recovered; the parse ends, unless an `#[error]` pattern called it, which makes it
+    /// `Mismatch`.
+    Fatal(Matcher<'a>),
 }
 
-impl<'a> Fail<'a> {
-    /// On `Miss`, runs `then` on the matcher; passes `Rest` and `Halt` on unchanged.
-    pub fn or(self, then: impl FnOnce(Matcher<'a>) -> Result<Matcher<'a>, Fail<'a>>) -> Result<Matcher<'a>, Fail<'a>> {
-        match self {
-            Fail::Miss(m) => then(m),
-            other => Err(other),
-        }
-    }
-
-    /// For an element after `%`: a `Miss` becomes `Rest`; `Rest` and `Halt` pass on.
-    pub fn rest(self) -> Fail<'a> {
-        match self {
-            Fail::Miss(m) => Fail::Rest(m),
-            other => other,
-        }
-    }
-
-    /// Ends `patt`: rewinds a `Miss` or `Rest` to `snap`; `Halt` passes on.
-    pub fn back(self, snap: Snapshot<'a>) -> Fail<'a> {
-        match self {
-            Fail::Miss(m) => Fail::Miss(m.rewind(snap)),
-            Fail::Rest(m) => Fail::Rest(m.rewind(snap)),
-            other => other,
-        }
-    }
-}
-
-/// What `scope` saw before running its closure.
+/// A point to rewind to: stack, message count and input. It stays on the call stack of the method that took it.
 #[derive(Clone, Copy)]
-pub struct Snapshot<'a> {
+struct Snapshot<'a> {
     stack: chain::Snapshot,
     error: usize,
     input: &'a str,
 }
 
 impl<'a> Matcher<'a> {
-    /// Starts at the front of `input` with no tags and no failures.
+    /// Starts at the front of `input` with no tags and no messages.
     pub fn new(input: &'a str) -> Self {
-        Matcher { stack: Chain::new(), error: Vec::new(), input, trace: Vec::new() }
+        Matcher { stack: Chain::new(), error: Vec::new(), input, track: Vec::new() }
     }
 
-    /// parse by eating literal
-    /// `Miss` if the input does not start with `lit`.
-    pub fn literal(mut self, lit: &str) -> Result<Self, Fail<'a>> {
+    /// The input not yet matched; an `#[error]` variant takes it at its start to find its span.
+    pub fn input(&self) -> &'a str {
+        self.input
+    }
+
+    /// Eats `lit` at the front. `Mismatch` if the input does not start with it.
+    pub fn literal(mut self, lit: &str) -> Failable<'a> {
         match self.input.strip_prefix(lit) {
             Some(rest) => {
                 self.input = rest;
-                Ok(self)
+                Failable::Success(self)
             }
-            None => Err(Fail::Miss(self)),
+            None => Failable::Mismatch(self),
         }
     }
 
-    /// parse by (compiled) regex; pushes `Text`. A match that does not start at the front is a miss.
-    /// The macro compiles `^(?:…)`, so the search stops at the front.
-    /// `Miss` if nothing matches at the front.
-    pub fn regex(mut self, rx: &Regex) -> Result<Self, Fail<'a>> {
+    /// Eats what `rx` matches at the front and pushes `Text`. The macro compiles `^(?:…)`, so the search stops at the
+    /// front. `Mismatch` if nothing matches there.
+    pub fn regex(mut self, rx: &Regex) -> Failable<'a> {
         match rx.find(self.input) {
             Some(found) if found.start() == 0 => {
                 let (text, rest) = self.input.split_at(found.end());
                 let now = self.stack.snapshot();
                 self.stack.push(Tag::Text(text), now);
                 self.input = rest;
-                Ok(self)
+                Failable::Success(self)
             }
-            _ => Err(Fail::Miss(self)),
+            _ => Failable::Mismatch(self),
         }
     }
 
@@ -125,150 +90,165 @@ impl<'a> Matcher<'a> {
         self
     }
 
-    /// Records a snapshot and runs `closure`. On `Ok`, pushes `rule`'s tag, linked before the tags the closure pushed;
-    /// a `Fail` passes on.
-    /// Panics if the closure returns `Miss` or `Rest` without rewinding to `snap`.
-    pub fn scope(
-        self, rule: Rule,
-        closure: impl Fn(Self, Snapshot<'a>) -> Result<Self, Fail<'a>>,
-    ) -> Result<Self, Fail<'a>> {
-        let snap = self.snapshot();
-        let done = closure(self, snap);
-        if let Err(Fail::Miss(m) | Fail::Rest(m)) = &done {
-            assert!(
-                m.stack.snapshot() == snap.stack,
-                "peggen: a `scope` closure returned `Miss` or `Rest` without rewinding to its snapshot"
-            );
-        }
-        let mut m = done?;
-        m.stack.push(Tag::Rule(rule), snap.stack);
-        Ok(m)
-    }
-
-    /// Matches `item` up to `most` times, `sep` before every item but the first; then pushes a `Many` tag,
-    /// linked before the items.
-    /// An iteration whose `sep` or `item` returns `Miss`, or that eats no input, is rewound and ends the loop.
-    /// `Rest` and `Halt` pass on. `Miss` if fewer than `least` items matched, rewound to the start.
+    /// Matches `item` up to `max` times, `sep` before every item but the first; then pushes a `Many` tag, linked before
+    /// the items. An iteration that returns `Mismatch`, or eats no input, is rewound and ends the loop. `Failure` and
+    /// `Fatal` pass on. `Mismatch` if fewer than `min` items matched, rewound to the start.
     pub fn repeat(
-        self, least: usize, most: usize,
-        sep: impl Fn(Self) -> Result<Self, Fail<'a>>,
-        item: impl Fn(Self) -> Result<Self, Fail<'a>>,
-    ) -> Result<Self, Fail<'a>> {
+        self, min: usize, max: usize,
+        sep: impl Fn(Self) -> Failable<'a>, item: impl Fn(Self) -> Failable<'a>,
+    ) -> Failable<'a> {
         let start = self.snapshot();
         let mut m = self;
         let mut count = 0;
-        while count < most {
+        while count < max {
             let snap = m.snapshot();
-            let step = if count == 0 { item(m) } else { sep(m).and_then(&item) };
+            let step = if count == 0 {
+                item(m)
+            } else {
+                match sep(m) {
+                    Failable::Success(m) => item(m),
+                    other => other,
+                }
+            };
             match step {
-                Ok(next) if next.input.len() < snap.input.len() => {
+                Failable::Success(next) if next.input.len() < snap.input.len() => {
                     m = next;
                     count += 1;
                 }
-                Ok(next) | Err(Fail::Miss(next)) => {
+                Failable::Success(next) | Failable::Mismatch(next) => {
                     m = next.rewind(snap);
                     break;
                 }
-                Err(fail) => return Err(fail),
+                other => return other,
             }
         }
-        if count < least {
-            return Err(Fail::Miss(m.rewind(start)));
+        if count < min {
+            return Failable::Mismatch(m.rewind(start));
         }
         m.stack.push(Tag::Many(count), start.stack);
-        Ok(m)
+        Failable::Success(m)
     }
 
-    /// One call keyed `key` at the front of the input. Misses at once, and marks that call, if a call with the same
-    /// key is running at the same position, both measured after the spaces `space` matches; nothing is consumed
-    /// (loop detection). Otherwise runs `first`; if this call got marked and
-    /// `first` matched, runs `round` (with the snapshot from before `first` and the rule matched last) until a round
-    /// misses or eats no input.
-    /// The call stays in the trace until it stops growing, so a call with the same key at the same position
-    /// during a round misses too.
-    pub(crate) fn call(
-        mut self, key: Key, space: Option<&Regex>,
-        first: impl FnOnce(Self) -> Result<Self, Fail<'a>>,
-        mut round: impl FnMut(Self, Snapshot<'a>, Rule) -> Result<Self, Fail<'a>>,
-    ) -> Result<Self, Fail<'a>> {
-        let blank = space.and_then(|rx| rx.find(self.input))
+    /// A bare `Ty`: one call of `Ty::PARSE`, as `TGIx::new(Ty::tix(), GIx(0))`.
+    pub fn choice<Ty: Match>(self) -> Failable<'a> {
+        self.call::<Ty>(TGIx::new(Ty::tix(), GIx(0)), Ty::PARSE)
+    }
+
+    /// `Ty@{…}`: one call of the variants `list`, in order; `group` caches the list's `TGIx` on the first call.
+    /// Caller obligation: one `group` per call site, always with the same `Ty` and `list`.
+    pub fn variants<Ty: Match>(self, list: &[VIx], group: &OnceLock<TGIx>) -> Failable<'a> {
+        let group = *group.get_or_init(|| TGIx::of(Ty::tix(), Ty::PARSE, list));
+        self.call::<Ty>(group, list)
+    }
+
+    /// Records a message of `kind` over `span`.
+    /// Caller obligation: `span` is part of the input given to `new`.
+    pub fn message(mut self, span: &'a str, kind: MessageKind, text: &'static str) -> Self {
+        self.error.push(Message { span, kind, text });
+        self
+    }
+
+    /// Pushes `rule`'s tag linked before every tag since `base`, so the variant becomes their parent.
+    fn adopt(mut self, rule: TVIx, base: Snapshot<'a>) -> Self {
+        self.stack.push(Tag::Rule(rule), base.stack);
+        self
+    }
+
+    /// One call of `group` over `list`. `Mismatch` at once, marking the running call, if a call of the same group runs
+    /// at the same position, both measured after `Ty::space` (loop detection). Otherwise keeps an entry on `track`
+    /// through `choose`, and `grow` if the entry was marked; pops it whatever the state.
+    fn call<Ty: Match>(mut self, group: TGIx, list: &[VIx]) -> Failable<'a> {
+        let blank = Ty::space().and_then(|rx| rx.find(self.input))
             .filter(|found| found.start() == 0)
             .map_or(0, |found| found.end());
         let place = self.input.len() - blank;
-        let looping = self.trace.iter_mut().rev()
+        let looping = self.track.iter_mut().rev()
             .take_while(|call| call.place == place)
-            .find(|call| call.title == key)
+            .find(|call| call.group == group)
             .map(|call| call.found = true)
             .is_some();
         if looping {
-            return Err(Fail::Miss(self));
+            return Failable::Mismatch(self);
         }
+        self.track.push(Call { group, place, found: false });
         let start = self.snapshot();
-        self.trace.push(Call { title: key, place, found: false });
-        let mut m = match first(self) {
-            Ok(m) => m,
-            Err(Fail::Miss(mut m)) => {
-                m.trace.pop();
-                return Err(Fail::Miss(m));
+        let done = match self.choose::<Ty>(start, list) {
+            (Failable::Success(m), Some(seed)) if m.track.last().is_some_and(|call| call.found) => {
+                m.grow::<Ty>(start, list, seed)
             }
-            Err(Fail::Rest(mut m)) => {
-                m.trace.pop();
-                return Err(Fail::Rest(m));
-            }
-            Err(halt) => return Err(halt),
+            (done, _) => done,
         };
-        let found = m.trace.last().is_some_and(|call| call.found);
-        while found {
-            let Some(&Tag::Rule(seed)) = m.stack.last() else { break };
-            let snap = m.snapshot();
-            m = match round(m, start, seed) {
-                Ok(next) if next.input.len() < snap.input.len() => next,
-                Ok(next) => {
-                    m = next.rewind(snap);
-                    break;
-                }
-                Err(Fail::Miss(next)) => {
-                    m = next;
-                    break;
-                }
-                Err(Fail::Rest(mut next)) => {
-                    next.trace.pop();
-                    return Err(Fail::Rest(next));
-                }
-                Err(halt) => return Err(halt),
-            };
-        }
-        m.trace.pop();
-        Ok(m)
+        done.amend(|mut m| {
+            m.track.pop();
+            m
+        })
     }
 
-    /// Runs `tail` from here. On `Ok`, pushes `rule`'s tag linked before every tag since `call`, so the rule becomes
-    /// the parent of the match since `call`; a `Miss` is rewound; a `Rest` halts.
-    pub(crate) fn wrap(
-        self, rule: Rule, call: Snapshot<'a>,
-        tail: impl FnOnce(Self) -> Result<Self, Fail<'a>>,
-    ) -> Result<Self, Fail<'a>> {
-        let snap = self.snapshot();
-        match tail(self) {
-            Ok(mut m) => {
-                m.stack.push(Tag::Rule(rule), call.stack);
-                Ok(m)
+    /// Tries `Ty::variant(…, None)` for `list` in order from `start`, rewinding after each `Mismatch`. The first
+    /// `Success` becomes the parent of its match and the seed; a `Failure` goes to `rescue` with no seed; `Fatal`
+    /// passes on. `Mismatch` if none matches.
+    fn choose<Ty: Match>(self, start: Snapshot<'a>, list: &[VIx]) -> (Failable<'a>, Option<VIx>) {
+        let mut m = self;
+        for &vix in list {
+            match Ty::variant(m, vix, None) {
+                Failable::Success(m) => {
+                    return (Failable::Success(m.adopt(TVIx::new(Ty::tix(), vix), start)), Some(vix));
+                }
+                Failable::Mismatch(back) => m = back.rewind(start),
+                Failable::Failure(back) => return (back.rescue::<Ty>(start, vix), None),
+                fatal => return (fatal, None),
             }
-            Err(Fail::Miss(m)) => Err(Fail::Miss(m.rewind(snap))),
-            Err(Fail::Rest(m)) => Err(m.rewind(snap).halt("no match after `%` while growing a left-recursive match")),
-            Err(halt) => Err(halt),
+        }
+        (Failable::Mismatch(m), None)
+    }
+
+    /// Grows the match since `start` from variant `seed`: each round tries `Ty::variant(…, Some(seed))` for `list` in
+    /// order, and the first that matches and eats input becomes the parent of everything since `start` and the next
+    /// seed. Stops at a round with no such variant; a `Failure` goes to `rescue`; `Fatal` passes on.
+    fn grow<Ty: Match>(self, start: Snapshot<'a>, list: &[VIx], seed: VIx) -> Failable<'a> {
+        let mut m = self;
+        let mut seed = seed;
+        'round: loop {
+            let snap = m.snapshot();
+            for &vix in list {
+                match Ty::variant(m, vix, Some(seed)) {
+                    Failable::Success(next) if next.input.len() < snap.input.len() => {
+                        m = next.adopt(TVIx::new(Ty::tix(), vix), start);
+                        seed = vix;
+                        continue 'round;
+                    }
+                    Failable::Success(next) | Failable::Mismatch(next) => m = next.rewind(snap),
+                    Failable::Failure(back) => return back.rescue::<Ty>(start, vix),
+                    fatal => return fatal,
+                }
+            }
+            return Failable::Success(m);
         }
     }
 
-    /// The current stack length, failure count and input; used by `scope` and `repeat`.
+    /// After variant `vix` failed here: rewinds to `start` and tries `Ty::variant(…, None)` for `Ty::errors(vix)` in
+    /// order; the first match becomes the parent of its match. If none matches, `Fatal` with "no match after `%`, and
+    /// no `#[error]` variant matched" over the text from `start` to here.
+    fn rescue<Ty: Match>(self, start: Snapshot<'a>, vix: VIx) -> Failable<'a> {
+        let span = &start.input[..start.input.len() - self.input.len()];
+        let mut m = self.rewind(start);
+        for &fix in Ty::errors(vix) {
+            match Ty::variant(m, fix, None) {
+                Failable::Success(m) => return Failable::Success(m.adopt(TVIx::new(Ty::tix(), fix), start)),
+                Failable::Mismatch(back) | Failable::Failure(back) | Failable::Fatal(back) => m = back.rewind(start),
+            }
+        }
+        Failable::Fatal(m.message(span, MessageKind::Fatal, "no match after `%`, and no `#[error]` variant matched"))
+    }
+
+    /// The current stack length, message count and input.
     fn snapshot(&self) -> Snapshot<'a> {
         Snapshot { stack: self.stack.snapshot(), error: self.error.len(), input: self.input }
     }
 
-    /// Rewinds stack, failures and input to `snap`.
-    /// Panics if `snap` holds more tags or failures than the matcher.
-    /// Caller obligation: `snap` is the one `scope` handed to this closure.
-    pub fn rewind(mut self, snap: Snapshot<'a>) -> Self {
+    /// Rewinds stack, messages and input to `snap`. Panics if `snap` holds more tags or messages than the matcher.
+    /// Caller obligation: `snap` was taken from this matcher by a method that is still running.
+    fn rewind(mut self, snap: Snapshot<'a>) -> Self {
         assert!(
             snap.error <= self.error.len(),
             "peggen: `rewind` got a snapshot from another matcher or from a later point"
@@ -278,29 +258,32 @@ impl<'a> Matcher<'a> {
         self.input = snap.input;
         self
     }
+}
 
-    /// Records `message` at the front of the input.
-    pub fn note(mut self, message: &'static str) -> Self {
-        self.error.push(Failure { place: self.input, cause: message });
-        self
-    }
-
-    /// `note`, then ends the parse: returns `Halt` with every failure recorded so far.
-    pub fn halt(self, message: &'static str) -> Fail<'a> {
-        Fail::Halt(self.note(message).error)
-    }
-
-    /// Ends phase 1. With no input left: `Ok` with the tags and the recovered failures.
-    /// With input left: `Err` with the failures, the last one saying where matching stopped.
-    pub fn end(self) -> Result<(Vec<Tag<'a>>, Vec<Failure<'a>>), Vec<Failure<'a>>> {
-        if !self.input.is_empty() {
-            return Err(self.stop());
+impl<'a> Failable<'a> {
+    /// Ends phase 1. `Success` with no input left: `Ok` with an `Assembler` over the tags, and the messages.
+    /// `Success` with input left, `Mismatch` or `Failure`: `Err` with the messages and a `Fatal` "parsing stops here"
+    /// over the input left. `Fatal`: `Err` with the messages.
+    pub fn end(self) -> Result<(Assembler<'a>, Vec<Message<'a>>), Vec<Message<'a>>> {
+        match self {
+            Failable::Success(m) if m.input.is_empty() => {
+                Ok((Assembler::new(m.stack.iter().copied().collect()), m.error))
+            }
+            Failable::Success(m) | Failable::Mismatch(m) | Failable::Failure(m) => {
+                let span = m.input;
+                Err(m.message(span, MessageKind::Fatal, "parsing stops here").error)
+            }
+            Failable::Fatal(m) => Err(m.error),
         }
-        Ok((self.stack.iter().copied().collect(), self.error))
     }
 
-    /// Records "parsing stops here" at the front of the input and returns every failure.
-    pub(crate) fn stop(self) -> Vec<Failure<'a>> {
-        self.note("parsing stops here").error
+    /// Runs `func` on the matcher and keeps the state.
+    fn amend(self, func: impl FnOnce(Matcher<'a>) -> Matcher<'a>) -> Self {
+        match self {
+            Failable::Success(m) => Failable::Success(func(m)),
+            Failable::Mismatch(m) => Failable::Mismatch(func(m)),
+            Failable::Failure(m) => Failable::Failure(func(m)),
+            Failable::Fatal(m) => Failable::Fatal(func(m)),
+        }
     }
 }

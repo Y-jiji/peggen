@@ -3,8 +3,9 @@ use quote::format_ident;
 use syn::Ident;
 
 /// Turns a bare name that names a field into `Elem::Field`, numbers the regexes, and rejects with a spanned error:
-/// a regex that does not compile; an `@{…}` name that is not a `#[parse]` variant of this enum; a field bound twice
-/// or never; `var =` next to an end-of-rule closure. Left recursion is handled at runtime.
+/// a regex that does not compile; an `@{…}` name that is not a `#[parse]` variant of this enum in a `#[parse]` rule,
+/// or not a `#[parse]` or `#[error]` variant in an `#[error]` rule; a field bound twice or never; `var =` next to an
+/// end-of-rule closure. Left recursion is handled at runtime.
 pub fn check(grammar: &mut Grammar) -> syn::Result<()> {
     if let Some(param) = grammar.param.type_params().next() {
         return Err(syn::Error::new(param.ident.span(), "a peggen enum takes lifetime parameters only"));
@@ -63,8 +64,9 @@ pub fn check(grammar: &mut Grammar) -> syn::Result<()> {
 }
 
 /// Resolves one sequence of case `case`: a bare name that names a field becomes `Elem::Field` with its type,
-/// regexes get their numbers and must compile, `@{…}` names of this enum must be `#[parse]` variants.
-/// `top` is false inside groups, where `var = (…)` is rejected.
+/// regexes get their numbers and must compile, `@{…}` names of this enum must be `#[parse]` variants, or also
+/// `#[error]` variants when `case` is an `#[error]` variant. `top` is false inside groups, where `var = (…)` is
+/// rejected.
 fn resolve(grammar: &Grammar, case: usize, seq: &mut Seq, top: bool, count: &mut usize) -> syn::Result<()> {
     for elem in seq.front.iter_mut().chain(seq.after.iter_mut().flatten()) {
         if let (false, Elem::Bound(name, _)) = (top, &*elem) {
@@ -93,11 +95,19 @@ fn resolve(grammar: &Grammar, case: usize, seq: &mut Seq, top: bool, count: &mut
                 *count += 1;
             }
             Elem::Typed(path, names) if path.is_ident(&grammar.title) => {
+                let error = matches!(grammar.cases[case].attrs, Attr::Error(..));
                 for name in names.iter() {
-                    let known = grammar.cases.iter()
-                        .any(|entry| entry.title == *name && matches!(entry.attrs, Attr::Parse(_)));
+                    let known = grammar.cases.iter().any(|entry| {
+                        entry.title == *name
+                            && match entry.attrs {
+                                Attr::Parse(_) => true,
+                                Attr::Error(..) => error,
+                                Attr::Empty => false,
+                            }
+                    });
                     if !known {
-                        let text = format!("`{name}` is not a `#[parse]` variant of `{}`", grammar.title);
+                        let kinds = if error { "`#[parse]` or `#[error]`" } else { "`#[parse]`" };
+                        let text = format!("`{name}` is not a {kinds} variant of `{}`", grammar.title);
                         return Err(syn::Error::new(name.span(), text));
                     }
                 }

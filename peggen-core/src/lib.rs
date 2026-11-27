@@ -3,29 +3,23 @@ mod chain;
 mod report;
 mod matcher;
 mod grammar;
-mod reader;
+mod assembler;
 mod apply;
 
-pub use tag::{Tag, Rule};
-pub use report::Failure;
-pub use matcher::{Matcher, Snapshot, Fail, Key};
-pub use grammar::{Match, Fault, Choice, Rescue, Build, Make, attempt, fault, expect, enter, grow, index};
-pub use reader::Reader;
+pub use tag::{Tag, TIx, VIx, GIx, TVIx, TGIx};
+pub use report::{Message, MessageKind};
+pub use matcher::{Matcher, Failable};
+pub use grammar::{Match, Build, Make, vix};
+pub use assembler::Assembler;
 pub use apply::*;
 pub use regex::Regex;
 
-/// Matches all of `input` as `Ty`, then builds it with `extra`.
-/// `Ok` holds the value and the recovered failures; `Err` holds the failures.
-pub fn parse<'a, Ty, Ex>(input: &'a str, extra: &mut Ex) -> Result<(Ty, Vec<Failure<'a>>), Vec<Failure<'a>>>
+/// Matches all of `input` as `Ty` through `Matcher::choice`, then builds it with `extra`.
+/// `Ok` holds the value and the `Error` messages; `Err` holds the messages, a `Fatal` one last.
+pub fn parse<'a, Ty, Ex>(input: &'a str, extra: &mut Ex) -> Result<(Ty, Vec<Message<'a>>), Vec<Message<'a>>>
 where
-    Ty: Choice + Build<'a, Ex>,
+    Ty: Match + Build<'a, Ex>,
 {
-    let m = match Ty::choice(Matcher::new(input)) {
-        Ok(m) => m,
-        Err(Fail::Miss(m) | Fail::Rest(m)) => return Err(m.stop()),
-        Err(Fail::Halt(error)) => return Err(error),
-    };
-    let (stack, error) = m.end()?;
-    let mut reader = Reader::new(stack);
-    Ok((Ty::build(&mut reader, extra), error))
+    let (mut assembler, messages) = Matcher::new(input).choice::<Ty>().end()?;
+    Ok((Ty::build(&mut assembler, extra), messages))
 }

@@ -32,12 +32,11 @@ Attributes:
 * `#[peggen(space = r"\s*")]` matching spaces. 
     * without `space`, no whitespace is skipped
 * `#[parse(...)]` fills peggen expression: on each variant of an enum, or once on a struct for its single rule. 
-* `#[error("..." : ...)]` is the fallback that `%` prefix matches. 
+* `#[error("..." : ...)]` is the fallback of the `#[parse]` variant before it. 
     * message and pattern. 
-    * For a type after `%`, go through error branches of that type. 
-    * For a regex/literal after `%`, go through error branches after that variant. 
-    * If both fail, go to the next `#[error]` variants, never a `#[parse]` one: try every `#[error]` variant before the next `#[parse]` variant (or up to the end of the enum when no `#[parse]` variant follows). 
-    * If it still fails, it is not recoverable. Raise error. 
+    * When an element after `%` fails, a type, a regex or a literal alike, the variant fails, and the `#[error]` variants after it are tried from the variant's start, up to the next `#[parse]` variant (or the end of the enum). 
+    * If none matches, it is not recoverable. Raise error. 
+    * Inside an `#[error]` pattern every failure is a mismatch, and `Type@{…}` may name `#[error]` variants, which a `#[parse]` pattern may not. 
 
 ## Algorithm
 
@@ -45,94 +44,85 @@ Runtime (matching): Try each variant's rule by order. If not matching, try next 
 * For regex / literal str, match regex / literal str and record the span. 
 * For space, match space and skip the span. 
 * For repeat, match content and separator, record each span. Add an repeat tag on top. 
-* If matching rule and progress are both the same, but depth goes deeper, it is left recursion. Therefore, fail current rule immediately and try the next one.
-* After its first match, such a call grows: it retries the variants that start with its own type, with the match so far as their first element, and keeps the longer match, until none extends it. A failure after `%` while growing is not recovered. 
+* A group is a type with an ordered list of its variants: `Type@{V1, V2, ...}`, or a bare `Type` for its `#[parse]` variants in declaration order. A call of a group that starts at the same position as a running call of the same group is left recursion: the inner call fails immediately, and its variant tries the next one.
+* After its first match, such a call grows: it retries the variants that start with its own type, with the match so far as their first element, and keeps the longer match, until none extends it. A failure after `%` while growing tries the `#[error]` variants after that variant, from the call's start. 
 * The whole input must be consumed: after the root type matches, the parser checks end of input.
 
 Runtime (errors): 
-* message: `expected one of …, found …`, listing the terminals that failed at the farthest position (inside `rest` for a `%` error, over the whole input otherwise)
-* a type that fails where it starts is named instead: `expected Json, found …`
+* only explicit failures are reported, each as a message with the span of input it covers, a kind and a text:
+    * an `#[error]` variant that matches records its message over the text it matched, kind `Error`, and parsing goes on
+    * a failure after `%` that no `#[error]` variant recovers ends the parse with `no match after %, and no #[error] variant matched`, kind `Fatal`, over the failed variant's text up to where it failed
+* with no explicit failure, a parse that cannot reach the end of input reports the input left: `parsing stops here`, kind `Fatal`
 
-## Example
+## Examples
 
-A simplified json parser:
+JSON (RFC 8259), from `peggen-examples/src/json.rs` (`unescape` decodes the escapes; see that file):
 
 ```rust
-#[peggen(space = r"\s*")]
+/// A JSON text (RFC 8259): one value, with whitespace skipped around it and between its parts.
+#[peggen(space = r"[ \t\n\r]*")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Json {
+    #[parse("null")]
+    Null,
     #[parse(_0 = (r"true|false" ; |x: &str| x == "true"))]
     Bool(bool),
-    #[parse("{" % _0 = (
-        "\"" _ r"[a-z]*" _ "\"" % ":" Json                                // kv pair
-        ; HashMap::new()                                                  // init
-        ; |map, key: &str, value| { map.insert(key.to_string(), value); } // fold
-    ) "," * "}")]
-    Map(HashMap<String, Json>),
-    #[parse("[" % list = (Json ; Vec::new() ; |list, val| { list.push(val); }) "," * "]")]
-    List { list: Vec<Json> },
-    #[parse("\"" % _ _0 = (r"[a-z]*" ; |x: &str| x.to_string()) _ "\"")]
+    #[parse(_0 = (r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?" ; |x: &str| x.parse::<f64>().unwrap()))]
+    Number(f64),
+    #[parse(_0 = (Text ; |Text(text)| text))]
     String(String),
-    #[parse(_0 = (r"[0-9]+" ; |x: &str| x.to_string()))]
-    Number(String),
+    #[parse("[" % _0 = (Json ; Vec::new() ; |list, value| list.push(value)) "," * "]")]
+    Array(Vec<Json>),
+    #[error("bad array, skipped to its `]`" : "[" r"[^\]]*" "]")]
+    BadArray,
+    #[parse("{" % _0 = (
+        Text ":" Json
+        ; Vec::new()
+        ; |members, Text(name), value| members.push((name, value))
+    ) "," * "}")]
+    Object(Vec<(String, Json)>),
+    #[error("bad object, skipped to its `}`" : "{" r"[^}]*" "}")]
+    BadObject,
 }
+
+/// A JSON string with its escapes decoded (RFC 8259, section 7).
+#[peggen]
+#[parse("\"" % _0 = (r#"(?:[^"\\\x00-\x1F]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*"# ; unescape) "\"")]
+struct Text(String);
 ```
 
-A calculator: 
+A calculator with precedence, left recursion and recovery from an unclosed parenthesis, from `peggen-examples/src/calc.rs`:
 
 ```rust
+/// The README calculator: `+` and `-` bind looser than `*` and `/`; all four associate to the left.
 #[peggen(space = r"\s*")]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CalcEx {
     #[parse(
-        _0 = (CalcEx@{Add, Sub, Mul, Div, Paren, Num} ; Box::new) "+" % 
+        _0 = (CalcEx@{Add, Sub, Mul, Div, Paren, Num} ; Box::new) "+" %
         _1 = (CalcEx@{Mul, Div, Paren, Num} ; Box::new)
     )]
     Add(Box<CalcEx>, Box<CalcEx>),
     #[parse(
-        _0 = (CalcEx@{Add, Sub, Mul, Div, Paren, Num} ; Box::new) "-" % 
+        _0 = (CalcEx@{Add, Sub, Mul, Div, Paren, Num} ; Box::new) "-" %
         _1 = (CalcEx@{Mul, Div, Paren, Num} ; Box::new)
     )]
     Sub(Box<CalcEx>, Box<CalcEx>),
     #[parse(
-        _0 = (CalcEx@{Mul, Div, Paren, Num} ; Box::new) "*" % 
+        _0 = (CalcEx@{Mul, Div, Paren, Num} ; Box::new) "*" %
         _1 = (CalcEx@{Paren, Num} ; Box::new)
     )]
     Mul(Box<CalcEx>, Box<CalcEx>),
     #[parse(
-        _0 = (CalcEx@{Mul, Div, Paren, Num} ; Box::new) "/" % 
+        _0 = (CalcEx@{Mul, Div, Paren, Num} ; Box::new) "/" %
         _1 = (CalcEx@{Paren, Num} ; Box::new)
     )]
     Div(Box<CalcEx>, Box<CalcEx>),
     #[parse("(" % _0 = (CalcEx ; Box::new) ")")]
     Paren(Box<CalcEx>),
+    #[error("unclosed parenthesis" : "(" r"[^)]*")]
+    Unclosed,
     #[parse(_0 = (r"[0-9]+" ; |x: &str| x.parse::<usize>().unwrap()))]
-    Num(usize),
-}
-```
-
-A calculator with arena allocation (each rule ends with a closure that receives every part, then `extra`, and returns the fields):
-
-```rust
-#[peggen(space = r"\s*", extra = &'a Bump)]
-pub enum ArenaEx<'a> {
-    #[parse(
-        ArenaEx@{Add, Mul, Paren, Num} "+" % ArenaEx@{Mul, Paren, Num}
-        |x, _plus, y, bump| (bump.alloc(x), bump.alloc(y))
-    )]
-    Add(&'a ArenaEx<'a>, &'a ArenaEx<'a>),
-    #[parse(
-        ArenaEx@{Mul, Paren, Num} "*" % ArenaEx@{Paren, Num}
-        |x, _star, y, bump| (bump.alloc(x), bump.alloc(y))
-    )]
-    Mul(&'a ArenaEx<'a>, &'a ArenaEx<'a>),
-    #[parse(
-        "(" % ArenaEx ")"
-        |_lpar, x, _rpar, bump| bump.alloc(x)
-    )]
-    Paren(&'a ArenaEx<'a>),
-    #[parse(
-        r"[0-9]+"
-        |x: &str, _bump| x.parse::<usize>().unwrap()
-    )]
     Num(usize),
 }
 ```

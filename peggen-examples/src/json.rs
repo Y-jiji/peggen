@@ -1,4 +1,4 @@
-use peggen::{peggen, Failure};
+use peggen::{peggen, Message};
 
 /// A JSON text (RFC 8259): one value, with whitespace skipped around it and between its parts.
 #[peggen(space = r"[ \t\n\r]*")]
@@ -14,12 +14,16 @@ pub enum Json {
     String(String),
     #[parse("[" % _0 = (Json ; Vec::new() ; |list, value| list.push(value)) "," * "]")]
     Array(Vec<Json>),
+    #[error("bad array, skipped to its `]`" : "[" r"[^\]]*" "]")]
+    BadArray,
     #[parse("{" % _0 = (
         Text ":" Json
         ; Vec::new()
         ; |members, Text(name), value| members.push((name, value))
     ) "," * "}")]
     Object(Vec<(String, Json)>),
+    #[error("bad object, skipped to its `}`" : "{" r"[^}]*" "}")]
+    BadObject,
 }
 
 /// A JSON string with its escapes decoded (RFC 8259, section 7).
@@ -27,9 +31,13 @@ pub enum Json {
 #[parse("\"" % _0 = (r#"(?:[^"\\\x00-\x1F]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*"# ; unescape) "\"")]
 struct Text(String);
 
-/// Parses a JSON text; on failure, returns the failures, the last one saying where parsing stopped.
-pub fn parse(input: &str) -> Result<Json, Vec<Failure<'_>>> {
-    peggen::parse::<Json, ()>(input, &mut ()).map(|(json, _)| json)
+/// Parses a JSON text. On any failure, returns every message: the bad arrays and objects that were skipped,
+/// and the one that stopped parsing, if any.
+pub fn parse(input: &str) -> Result<Json, Vec<Message<'_>>> {
+    match peggen::parse::<Json, ()>(input, &mut ()) {
+        Ok((json, messages)) if messages.is_empty() => Ok(json),
+        Ok((_, messages)) | Err(messages) => Err(messages),
+    }
 }
 
 /// Decodes the escapes in the body of a JSON string; a lone surrogate becomes U+FFFD.
@@ -116,6 +124,16 @@ mod correct {
         }
     }
 
+    /// `[[1,], {"a" 1}, 2]` recovers to `Array([BadArray, BadObject, Number(2.0)])`, with messages at 1:2 and 1:8.
+    #[test]
+    fn recovery() {
+        let input = r#"[[1,], {"a" 1}, 2]"#;
+        let (value, messages) = peggen::parse::<Json, ()>(input, &mut ()).expect("recovers");
+        assert_eq!(value, Json::Array(vec![Json::BadArray, Json::BadObject, Json::Number(2.0)]));
+        let found: Vec<_> = messages.iter().map(|message| (message.locate(input), message.text)).collect();
+        assert_eq!(found, [((1, 2), "bad array, skipped to its `]`"), ((1, 8), "bad object, skipped to its `}`")]);
+    }
+
     /// 2000 pseudo-random values, printed with mixed whitespace and escapes, parse back equal.
     #[test]
     fn roundtrip() {
@@ -178,6 +196,7 @@ mod correct {
                 }
                 out.push_str("\r\n}");
             }
+            Json::BadArray | Json::BadObject => unreachable!("`random` never builds error variants"),
         }
     }
 

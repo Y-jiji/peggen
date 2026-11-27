@@ -68,11 +68,6 @@ impl<T> Chain<T> {
         }
     }
 
-    /// The item pushed last, if any.
-    pub(crate) fn last(&self) -> Option<&T> {
-        self.stack.last().map(|node| &node.data)
-    }
-
     /// The items in reading order.
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         let mut place = self.first;
