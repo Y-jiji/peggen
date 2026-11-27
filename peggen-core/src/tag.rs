@@ -7,6 +7,8 @@ pub enum Tag<'a> {
     Text(&'a str),
     /// One `scope`: its rule, and the index one past its last inner tag.
     Rule { rule: Rule, stop: usize },
+    /// One `repeat`: how many items matched.
+    Many { count: usize },
 }
 
 /// A global rule number. Each rule takes one from `RULE_COUNT` on its first call.

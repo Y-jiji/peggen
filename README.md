@@ -28,7 +28,7 @@ Peggen's syntax is macro-flavored.
 * `_` turns off the automatic space skip at that point: no whitespace is allowed there
 
 Attributes: 
-* `#[peggen(extra = T)]` passes a value of type `T` to every closure as its last argument. 
+* `#[peggen(extra = T)]` passes `&mut T` to every closure as its last argument. 
 * `#[peggen(space = r"\s*")]` matching spaces. 
     * without `space`, no whitespace is skipped
 * `#[parse(...)]` fills peggen expression. 
