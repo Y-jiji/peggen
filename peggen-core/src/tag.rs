@@ -21,10 +21,10 @@ pub struct TIx(u16);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VIx(pub u16);
 
-/// A variant group's index within its type: 0 is the type's `#[parse]` variants in declaration order; any other list
-/// gets a number from 1.
+/// A variant group's index within its type: `GIx::PARSE` is the type's `#[parse]` variants in declaration order;
+/// `TGIx::of` hands out the others from 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GIx(pub u16);
+pub struct GIx(u16);
 
 /// A variant's number `tix<<16|vix`, pushed as the `Rule` tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +46,11 @@ impl TIx {
         let number = TIX_COUNT.fetch_add(1, Ordering::Relaxed);
         TIx(u16::try_from(number).expect("peggen: more than 65,536 types"))
     }
+}
+
+impl GIx {
+    /// Group 0: `Match::PARSE`, the type's `#[parse]` variants in declaration order.
+    pub const PARSE: GIx = GIx(0);
 }
 
 impl TVIx {
@@ -71,11 +76,11 @@ impl TGIx {
         TGIx(u32::from(tix.0) << 16 | u32::from(gix.0))
     }
 
-    /// The group of `list` in type `tix`: `GIx(0)` if it equals `parse`, else the `GIx` handed out before for the same
-    /// list, or the next one. Panics past 65,536 lists for one type.
+    /// The group of `list` in type `tix`: `GIx::PARSE` if it equals `parse`, else the `GIx` handed out before for the
+    /// same list, or the next one. Panics past 65,536 lists for one type.
     pub fn of(tix: TIx, parse: &[VIx], list: &[VIx]) -> TGIx {
         if list == parse {
-            return TGIx::new(tix, GIx(0));
+            return TGIx::new(tix, GIx::PARSE);
         }
         let high = u32::from(tix.0) << 16;
         let mut known = GROUP_LIST.lock().expect("peggen: the group list was poisoned by an earlier panic");

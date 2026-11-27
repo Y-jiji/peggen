@@ -4,7 +4,7 @@ use crate::{Assembler, Failable, Matcher, Regex, TIx, VIx};
 pub trait Match {
     /// Variant names in declaration order; `vix` finds a name's `VIx` here at compile time.
     const VARIANTS: &'static [&'static str];
-    /// The `#[parse]` variants in declaration order: what a bare `Type` tries, group `GIx(0)`.
+    /// The `#[parse]` variants in declaration order: what a bare `Type` tries, group `GIx::PARSE`.
     const PARSE: &'static [VIx];
     /// This type's `TIx`; takes one from `TIx::next` on the first call.
     fn tix() -> TIx;

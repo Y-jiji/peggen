@@ -129,9 +129,9 @@ impl<'a> Matcher<'a> {
         Failable::Success(m)
     }
 
-    /// A bare `Ty`: one call of `Ty::PARSE`, as `TGIx::new(Ty::tix(), GIx(0))`.
+    /// A bare `Ty`: one call of `Ty::PARSE`, as `TGIx::new(Ty::tix(), GIx::PARSE)`.
     pub fn choice<Ty: Match>(self) -> Failable<'a> {
-        self.call::<Ty>(TGIx::new(Ty::tix(), GIx(0)), Ty::PARSE)
+        self.call::<Ty>(TGIx::new(Ty::tix(), GIx::PARSE), Ty::PARSE)
     }
 
     /// `Ty@{…}`: one call of the variants `list`, in order; `group` caches the list's `TGIx` on the first call.
