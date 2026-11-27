@@ -6,6 +6,7 @@ Peggen's syntax is macro-flavored.
 
 * `r"abc"` matching a regex (a raw string literal, follow regex grammar; write `r#"..."#` when the regex contains `"`)
 * without `r`, simple `"abc"` matches plain text
+* no `!` / `&` predicates; exclude keywords inside the regex (e.g. `r"int\b"`) and by variant order
 * whitespace (the `space` regex) is skipped automatically between adjacent elements; `_` between two elements means no whitespace there
 * `var` parse and store as `var`
     * parse by default expression, follow the peggen expression binded to `var`'s type
@@ -13,26 +14,29 @@ Peggen's syntax is macro-flavored.
     * `var` is matching variable
     * `exp` is any peggen expression or a type name
 * `var = (exp ; closure)` parse and process with closure
-* `var = (exp ; closure)?` parse (or not) and process with closure, closure will get `None`
+* `var = (exp ; closure)?` parse (or not) and process with closure; the closure gets one `Option` of all values of `exp` (`None` when `exp` does not match)
 * `var = (exp ; init ; fold) sep *` parse and process with folding function `+` means at least once, `*` means zero or multiple, sep means separator
 * eliding `var =` forwards it to outer closure, for example `(exp)` parse as exp directly
     * inside a group `(exp ; closure)`, only types, fields and regexes pass values to the closure (a regex passes its matched `&str`); plain-text literals and `_` pass nothing
 * `exp |args| fields` at the end of a rule: every part passes its value to the closure in order (a type its value, a regex or plain-text literal its matched `&str`, a group its closure's result; `_` passes nothing), then `extra`; the closure returns the variant's fields: the value itself for a single-field variant, a tuple in field order otherwise
     * only a group changes how its parts are passed
+    * parts not bound with `var =` go to this closure
+    * recursive fields are boxed explicitly, in a group closure (`; Box::new`) or in this closure
 * an expression can be a type directly; a bare `Type` tries every variant in declaration order
 * `Type@{V1, V2, ...}` parse `Type` using only the rules of variants `V1, V2, ...`, tried in the listed order
 * `prefix % rest` if `prefix` matches, `rest` must match, otherwise the input is wrong (an error, not a backtrack); `%` splits the sequence it appears in
-* `_` skips space
+* `_` turns off the automatic space skip at that point: no whitespace is allowed there
 
 Attributes: 
 * `#[peggen(extra = T)]` passes a value of type `T` to every closure as its last argument. 
 * `#[peggen(space = r"\s*")]` matching spaces. 
+    * without `space`, no whitespace is skipped
 * `#[parse(...)]` fills peggen expression. 
 * `#[error("..." : ...)]` is the fallback that `%` prefix matches. 
     * message and pattern. 
     * For a type after `%`, go through error branches of that type. 
     * For a regex/literal after `%`, go through error branches after that variant. 
-    * If both fails, finally fall to next variant. 
+    * If both fail, go to the next `#[error]` variants, never a `#[parse]` one: try every `#[error]` variant before the next `#[parse]` variant (or up to the end of the enum when no `#[parse]` variant follows). 
     * If it still fails, it is not recoverable. Raise error. 
 
 ## Algorithm
@@ -42,6 +46,11 @@ Runtime (matching): Try each variant's rule by order. If not matching, try next 
 * For space, match space and skip the span. 
 * For repeat, match content and separator, record each span. Add an repeat tag on top. 
 * If matching rule and progress are both the same, but depth goes deeper, it is left recursion. Therefore, fail current rule immediately and try the next one. 
+* The whole input must be consumed: after the root type matches, the parser checks end of input.
+
+Runtime (errors): 
+* message: `expected one of …, found …`, listing the terminals that failed at the farthest position (inside `rest` for a `%` error, over the whole input otherwise)
+* a type that fails where it starts is named instead: `expected Json, found …`
 
 ## Example
 
